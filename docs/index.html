@@ -1,0 +1,1432 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Trainingspräsenz</title>
+<meta name="description" content="Anwesenheitserfassung für Training und Wettkampf.">
+<meta name="theme-color" content="#1B6B48" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0C1411" media="(prefers-color-scheme: dark)">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Präsenz">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="robots" content="noindex, nofollow">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Oswald:wght@500;600&family=Source+Sans+3:ital,wght@0,400;0,600;0,700&display=swap">
+<style id="app-style">
+
+:root{
+  --bg:#F0F3F1; --surface:#FFFFFF; --surface-2:#E7ECE9; --surface-3:#DCE3DF;
+  --ink:#101A16; --ink-2:#44534C; --ink-3:#6F7E77;
+  --line:#D5DCD8; --line-2:#C2CCC7;
+  --accent:#1B6B48; --accent-2:#14563a; --on-accent:#FFFFFF; --accent-soft:#E1EFE8;
+  --warn:#8E6210; --warn-soft:#F6EEDA;
+  --bad:#A5322A; --bad-soft:#F8E5E3;
+  --info:#2C5C88; --info-soft:#E2ECF5;
+  --shadow:0 1px 2px rgba(16,26,22,.06),0 10px 24px -18px rgba(16,26,22,.45);
+  --r:14px; --r-s:10px;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --bg:#0C1411; --surface:#141E19; --surface-2:#1B2822; --surface-3:#25342C;
+    --ink:#E9EFEB; --ink-2:#A8B7AF; --ink-3:#7A8982;
+    --line:#25342C; --line-2:#32443B;
+    --accent:#4FBF89; --accent-2:#6FD3A2; --on-accent:#06150E; --accent-soft:#14291F;
+    --warn:#E0AE55; --warn-soft:#2A2214;
+    --bad:#EC8578; --bad-soft:#2E1A18;
+    --info:#8FB6DC; --info-soft:#16232E;
+    --shadow:0 1px 2px rgba(0,0,0,.4),0 10px 24px -18px rgba(0,0,0,.9);
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0C1411; --surface:#141E19; --surface-2:#1B2822; --surface-3:#25342C;
+  --ink:#E9EFEB; --ink-2:#A8B7AF; --ink-3:#7A8982;
+  --line:#25342C; --line-2:#32443B;
+  --accent:#4FBF89; --accent-2:#6FD3A2; --on-accent:#06150E; --accent-soft:#14291F;
+  --warn:#E0AE55; --warn-soft:#2A2214;
+  --bad:#EC8578; --bad-soft:#2E1A18;
+  --info:#8FB6DC; --info-soft:#16232E;
+  --shadow:0 1px 2px rgba(0,0,0,.4),0 10px 24px -18px rgba(0,0,0,.9);
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{
+  margin:0;background:var(--bg);color:var(--ink);
+  font-family:"Source Sans 3",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+  font-size:16px;line-height:1.5;-webkit-font-smoothing:antialiased;
+  overscroll-behavior-y:none;
+}
+h1,h2,h3,.disp{font-family:Oswald,"Source Sans 3",Impact,sans-serif;font-weight:600;letter-spacing:.01em;margin:0}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:6px}
+.tnum{font-variant-numeric:tabular-nums}
+
+/* ---------- chrome ---------- */
+.topbar{
+  position:sticky;top:0;z-index:30;background:var(--surface);
+  border-bottom:1px solid var(--line);
+  padding:calc(env(safe-area-inset-top) + 10px) 16px 10px;
+}
+.topbar-in{max-width:900px;margin:0 auto;display:flex;align-items:center;gap:12px;min-height:34px}
+.brand{display:flex;flex-direction:column;gap:1px;min-width:0;flex:1}
+.brand b{font-family:Oswald,sans-serif;font-weight:600;font-size:18px;line-height:1.15;text-transform:uppercase;letter-spacing:.04em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.brand span{font-size:12px;color:var(--ink-3);letter-spacing:.06em;text-transform:uppercase}
+.back{
+  display:inline-flex;align-items:center;gap:6px;background:none;border:0;padding:6px 8px 6px 0;
+  color:var(--accent);font-weight:600;font-size:15px;
+}
+.app{max-width:900px;margin:0 auto;padding:16px 16px calc(96px + env(safe-area-inset-bottom))}
+.nav{
+  position:fixed;left:0;right:0;bottom:0;z-index:30;background:var(--surface);
+  border-top:1px solid var(--line);padding-bottom:env(safe-area-inset-bottom);
+}
+.nav-in{max-width:900px;margin:0 auto;display:grid;grid-template-columns:repeat(3,1fr)}
+.nav button{
+  background:none;border:0;padding:9px 4px 11px;display:flex;flex-direction:column;align-items:center;gap:3px;
+  color:var(--ink-3);font-size:11px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;
+  border-top:2px solid transparent;margin-top:-1px;
+}
+.nav button svg{width:22px;height:22px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.nav button[aria-current="page"]{color:var(--accent);border-top-color:var(--accent)}
+
+/* ---------- building blocks ---------- */
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--shadow)}
+.stack{display:flex;flex-direction:column;gap:12px}
+.stack-s{display:flex;flex-direction:column;gap:8px}
+.row{display:flex;align-items:center;gap:10px}
+.wrap{display:flex;flex-wrap:wrap;gap:8px}
+.grow{flex:1;min-width:0}
+.eyebrow{
+  font-family:Oswald,sans-serif;font-weight:500;font-size:12px;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--ink-3);margin:22px 0 10px;display:flex;align-items:center;gap:10px;
+}
+.eyebrow:first-child{margin-top:4px}
+.eyebrow::after{content:"";flex:1;height:1px;background:var(--line)}
+.muted{color:var(--ink-3)}
+.small{font-size:13px}
+.empty{padding:26px 18px;text-align:center;color:var(--ink-3);font-size:14px;line-height:1.6}
+.empty b{display:block;color:var(--ink-2);font-size:15px;margin-bottom:4px}
+
+.btn{
+  display:inline-flex;align-items:center;justify-content:center;gap:8px;
+  border:1px solid var(--line-2);background:var(--surface);color:var(--ink);
+  border-radius:var(--r-s);padding:11px 15px;font-weight:600;font-size:15px;min-height:44px;
+}
+.btn:active{transform:translateY(1px)}
+.btn-primary{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+.btn-ghost{border-color:transparent;background:var(--surface-2)}
+.btn-danger{color:var(--bad);border-color:var(--line-2)}
+.btn-sm{min-height:36px;padding:7px 11px;font-size:14px;border-radius:9px}
+.btn-block{width:100%}
+.btn[disabled]{opacity:.5;pointer-events:none}
+.iconbtn{
+  border:1px solid var(--line);background:var(--surface);border-radius:9px;width:36px;height:36px;
+  display:inline-flex;align-items:center;justify-content:center;color:var(--ink-3);flex:none;
+}
+.iconbtn svg{width:17px;height:17px;stroke:currentColor;fill:none;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
+
+label.f{display:flex;flex-direction:column;gap:5px;font-size:13px;font-weight:600;color:var(--ink-2);flex:1;min-width:0}
+input[type=text],input[type=date],input[type=time],input[type=number],select,textarea{
+  width:100%;background:var(--surface);border:1px solid var(--line-2);border-radius:var(--r-s);
+  padding:10px 12px;font-size:16px;font-weight:400;color:var(--ink);min-height:44px;
+}
+textarea{min-height:96px;line-height:1.45;resize:vertical}
+input::placeholder,textarea::placeholder{color:var(--ink-3)}
+
+.pill{
+  display:inline-flex;align-items:center;gap:6px;border-radius:999px;padding:4px 10px;
+  font-size:12px;font-weight:700;letter-spacing:.03em;border:1px solid transparent;white-space:nowrap;
+}
+.pill-training{background:var(--accent-soft);color:var(--accent);border-color:color-mix(in srgb,var(--accent) 25%,transparent)}
+.pill-match{background:var(--info-soft);color:var(--info);border-color:color-mix(in srgb,var(--info) 30%,transparent)}
+.pill-open{background:var(--warn-soft);color:var(--warn);border-color:color-mix(in srgb,var(--warn) 30%,transparent)}
+.pill-done{background:var(--surface-2);color:var(--ink-2);border-color:var(--line)}
+
+.banner{
+  border-radius:var(--r-s);padding:11px 13px;font-size:14px;line-height:1.45;
+  background:var(--warn-soft);color:var(--warn);border:1px solid color-mix(in srgb,var(--warn) 28%,transparent);
+}
+.toast{
+  position:fixed;left:50%;transform:translateX(-50%);bottom:calc(74px + env(safe-area-inset-bottom));
+  z-index:60;background:var(--ink);color:var(--bg);padding:11px 16px;border-radius:999px;
+  font-size:14px;font-weight:600;box-shadow:var(--shadow);max-width:calc(100% - 32px);text-align:center;
+}
+@media (prefers-reduced-motion:no-preference){
+  .toast{animation:pop .18s ease-out}
+  @keyframes pop{from{opacity:0;transform:translate(-50%,8px)}to{opacity:1;transform:translate(-50%,0)}}
+}
+
+/* ---------- event list ---------- */
+.ev{
+  display:flex;align-items:stretch;gap:0;width:100%;text-align:left;background:var(--surface);
+  border:1px solid var(--line);border-radius:var(--r);padding:0;overflow:hidden;box-shadow:var(--shadow);
+  color:inherit;font:inherit;
+}
+.ev-date{
+  flex:none;width:64px;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:0;padding:12px 6px;background:var(--surface-2);border-right:1px solid var(--line);
+}
+.ev-dow{font-family:Oswald,sans-serif;font-size:12px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-3)}
+.ev-day{font-family:Oswald,sans-serif;font-size:26px;line-height:1.05;font-weight:600}
+.ev-mon{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-3)}
+.ev-body{flex:1;min-width:0;padding:11px 13px;display:flex;flex-direction:column;gap:6px;justify-content:center}
+.ev-title{font-weight:700;font-size:16px;line-height:1.25}
+.ev-meta{font-size:13px;color:var(--ink-3);display:flex;flex-wrap:wrap;gap:4px 10px}
+.ev-side{flex:none;display:flex;align-items:center;padding-right:12px;color:var(--ink-3)}
+.ev-side svg{width:18px;height:18px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.ev-quote{font-family:Oswald,sans-serif;font-size:17px;color:var(--ink-2);font-variant-numeric:tabular-nums}
+.ev.is-late .ev-date{background:var(--warn-soft)}
+.ev.is-late .ev-day,.ev.is-late .ev-dow,.ev.is-late .ev-mon{color:var(--warn)}
+.ev.is-today{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent),var(--shadow)}
+
+/* ---------- attendance sheet ---------- */
+.sheet-head{padding:14px;display:flex;flex-direction:column;gap:10px}
+.sheet-title{font-family:Oswald,sans-serif;font-size:22px;font-weight:600;line-height:1.15}
+.coach{
+  display:inline-flex;align-items:center;gap:7px;border:1px solid var(--line-2);background:var(--surface);
+  border-radius:999px;padding:8px 13px;font-size:14px;font-weight:600;min-height:40px;
+}
+.coach[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+.coach svg{width:15px;height:15px;stroke:currentColor;fill:none;stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round}
+
+.plist{list-style:none;margin:0;padding:0;display:flex;flex-direction:column}
+.plist li{display:flex;align-items:center;gap:10px;padding:9px 13px;border-top:1px solid var(--line)}
+.plist li:first-child{border-top:0}
+.pname{flex:1;min-width:0;font-size:15px;line-height:1.3}
+.pname b{font-weight:700}
+.pname small{display:block;font-size:12px;color:var(--ink-3)}
+.seg{display:grid;grid-template-columns:repeat(4,38px);gap:4px;flex:none}
+.seg button{
+  height:40px;border-radius:9px;border:1px solid var(--line-2);background:var(--surface-2);
+  color:var(--ink-3);font-family:Oswald,sans-serif;font-size:15px;font-weight:600;padding:0;
+}
+.seg button[aria-pressed="true"]{color:var(--on-accent)}
+.seg button.s-present[aria-pressed="true"]{background:var(--accent);border-color:var(--accent)}
+.seg button.s-late[aria-pressed="true"]{background:var(--info);border-color:var(--info);color:#fff}
+.seg button.s-excused[aria-pressed="true"]{background:var(--warn);border-color:var(--warn);color:#fff}
+.seg button.s-absent[aria-pressed="true"]{background:var(--bad);border-color:var(--bad);color:#fff}
+:root[data-theme="dark"] .seg button[aria-pressed="true"],
+:root:not([data-theme="light"]) .seg button.s-late[aria-pressed="true"]{color:var(--on-accent)}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]) .seg button[aria-pressed="true"]{color:var(--on-accent)}
+}
+.legend{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:12px;color:var(--ink-3);padding:0 2px}
+.legend span{display:inline-flex;align-items:center;gap:5px}
+.legend i{width:9px;height:9px;border-radius:3px;display:inline-block}
+.tally{display:flex;flex-wrap:wrap;gap:6px}
+.tally b{font-family:Oswald,sans-serif;font-weight:600}
+.actionbar{
+  position:sticky;bottom:calc(66px + env(safe-area-inset-bottom));z-index:20;
+  padding:10px;margin:14px -4px 0;background:color-mix(in srgb,var(--bg) 86%,transparent);
+  backdrop-filter:blur(8px);border-radius:var(--r);
+}
+
+/* ---------- stats ---------- */
+.kpis{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
+@media(min-width:640px){.kpis{grid-template-columns:repeat(4,1fr)}}
+.kpi{padding:13px 14px;display:flex;flex-direction:column;gap:2px}
+.kpi b{font-family:Oswald,sans-serif;font-size:28px;font-weight:600;line-height:1.1;font-variant-numeric:tabular-nums}
+.kpi span{font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-3)}
+.seglist{display:flex;background:var(--surface-2);border:1px solid var(--line);border-radius:11px;padding:3px;gap:3px}
+.seglist button{
+  flex:1;border:0;background:none;border-radius:8px;padding:8px 6px;font-size:14px;font-weight:600;color:var(--ink-3);min-height:38px;
+}
+.seglist button[aria-pressed="true"]{background:var(--surface);color:var(--ink);box-shadow:var(--shadow)}
+.prow{display:flex;align-items:center;gap:12px;padding:11px 13px;border-top:1px solid var(--line)}
+.prow:first-child{border-top:0}
+.prow-main{flex:1;min-width:0;display:flex;flex-direction:column;gap:6px}
+.prow-name{font-size:15px;font-weight:600;line-height:1.25}
+.bar{height:7px;border-radius:999px;background:var(--surface-3);overflow:hidden;display:flex}
+.bar i{display:block;height:100%}
+.bar .b-present{background:var(--accent)}
+.bar .b-late{background:var(--info)}
+.bar .b-excused{background:var(--warn)}
+.bar .b-absent{background:var(--bad)}
+.prow-num{font-family:Oswald,sans-serif;font-size:20px;font-weight:600;font-variant-numeric:tabular-nums;flex:none;width:62px;text-align:right}
+.prow-sub{font-size:12px;color:var(--ink-3);font-variant-numeric:tabular-nums}
+.tblwrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
+table.grid{border-collapse:collapse;width:100%;font-size:14px}
+table.grid th,table.grid td{padding:8px 10px;text-align:left;border-bottom:1px solid var(--line);white-space:nowrap}
+table.grid th{font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-3);font-weight:600}
+table.grid td.num{text-align:right;font-variant-numeric:tabular-nums}
+
+/* ---------- admin ---------- */
+.tabs{display:flex;gap:6px;overflow-x:auto;padding-bottom:2px;-webkit-overflow-scrolling:touch}
+.tabs button{
+  flex:none;border:1px solid var(--line-2);background:var(--surface);border-radius:999px;
+  padding:8px 14px;font-size:14px;font-weight:600;color:var(--ink-2);min-height:40px;
+}
+.tabs button[aria-pressed="true"]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.item{display:flex;align-items:center;gap:10px;padding:10px 13px;border-top:1px solid var(--line)}
+.item:first-child{border-top:0}
+.item .grow b{font-size:15px}
+.item.off .grow{opacity:.55}
+.formgrid{display:flex;flex-wrap:wrap;gap:10px}
+.formgrid > *{flex:1 1 140px}
+.dlg{border:0;padding:0;background:none;max-width:100%}
+.dlg::backdrop{background:rgba(8,14,11,.55)}
+.dlg-in{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:16px;width:min(440px,calc(100vw - 32px));box-shadow:var(--shadow);color:var(--ink)}
+
+/* ---------- PIN-Sperre ---------- */
+.lock{min-height:100dvh;display:flex;align-items:center;justify-content:center;padding:24px 16px;background:var(--bg)}
+.lock-card{width:min(340px,100%);display:flex;flex-direction:column;align-items:center;gap:18px;text-align:center}
+.lock-mark{
+  width:56px;height:56px;border-radius:18px;background:var(--accent);color:var(--on-accent);
+  display:flex;align-items:center;justify-content:center;font-family:Oswald,sans-serif;font-size:26px;font-weight:600;
+}
+.lock-title{font-family:Oswald,sans-serif;font-size:22px;font-weight:600;line-height:1.2}
+.lock-sub{font-size:14px;color:var(--ink-3);margin-top:-12px}
+.dots{display:flex;gap:12px}
+.dots i{width:13px;height:13px;border-radius:50%;border:1.5px solid var(--line-2);display:block}
+.dots i.on{background:var(--accent);border-color:var(--accent)}
+.lock.bad .dots i{border-color:var(--bad)}
+@media (prefers-reduced-motion:no-preference){ .lock.bad .dots{animation:shake .32s} }
+@keyframes shake{25%{transform:translateX(-7px)}50%{transform:translateX(7px)}75%{transform:translateX(-4px)}}
+.keys{display:grid;grid-template-columns:repeat(3,72px);gap:14px;justify-content:center}
+.keys button{
+  height:72px;border-radius:50%;border:1px solid var(--line);background:var(--surface);color:var(--ink);
+  font-family:Oswald,sans-serif;font-size:24px;font-weight:500;box-shadow:var(--shadow);
+}
+.keys button.wide{border:0;background:none;box-shadow:none;font-size:15px;font-family:"Source Sans 3",sans-serif;font-weight:600;color:var(--ink-3)}
+.keys button:active{background:var(--surface-2)}
+
+/* ---------- Bericht / Druck ---------- */
+.report h2{font-size:17px;margin:22px 0 8px}
+.report .rep-head{border-bottom:2px solid var(--ink);padding-bottom:10px;margin-bottom:4px}
+.report .rep-head b{font-family:Oswald,sans-serif;font-size:23px;font-weight:600;display:block}
+.report .rep-head span{font-size:13px;color:var(--ink-2)}
+.report table.grid td.mx{text-align:center;font-weight:700;padding:5px 6px}
+.mx-present{color:var(--accent)} .mx-late{color:var(--info)} .mx-excused{color:var(--warn)} .mx-absent{color:var(--bad)}
+@media print{
+  :root, :root[data-theme="dark"], :root:not([data-theme="light"]){
+    --bg:#fff; --surface:#fff; --surface-2:#f4f4f4; --surface-3:#e8e8e8;
+    --ink:#000; --ink-2:#333; --ink-3:#555; --line:#bbb; --line-2:#999;
+    --accent:#14603F; --on-accent:#fff; --accent-soft:#e8f1ec;
+    --warn:#7d5a0c; --warn-soft:#f6efdd; --bad:#94291f; --bad-soft:#f8e6e4;
+    --info:#22506f; --info-soft:#e5edf4; --shadow:none;
+  }
+  .topbar,.nav,.noprint,.toast{display:none !important}
+  .app{padding:0 !important;max-width:none}
+  body{background:#fff}
+  .card{box-shadow:none;break-inside:avoid}
+  .eyebrow{margin-top:14px}
+  table.grid{font-size:10.5px}
+  table.grid th,table.grid td{padding:3px 5px;border-bottom:1px solid #ccc}
+  .tblwrap{overflow:visible}
+  h2{break-after:avoid}
+  @page{margin:12mm 10mm}
+}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script src="config.js"></script>
+<script id="app-code">
+
+(function(){
+"use strict";
+
+/* ===================== Konstanten ===================== */
+var TITLE = "Trainingspräsenz";
+var DOW = ["Sonntag","Montag","Dienstag","Mittwoch","Donnerstag","Freitag","Samstag"];
+var DOW_S = ["So","Mo","Di","Mi","Do","Fr","Sa"];
+var MON_S = ["Jan","Feb","Mär","Apr","Mai","Jun","Jul","Aug","Sep","Okt","Nov","Dez"];
+var STATUS = [
+  {k:"present", ab:"A", label:"Anwesend",      cls:"s-present", color:"var(--accent)"},
+  {k:"late",    ab:"V", label:"Verspätet",     cls:"s-late",    color:"var(--info)"},
+  {k:"excused", ab:"E", label:"Entschuldigt",  cls:"s-excused", color:"var(--warn)"},
+  {k:"absent",  ab:"F", label:"Fehlt",         cls:"s-absent",  color:"var(--bad)"}
+];
+var SK = {}; STATUS.forEach(function(s){ SK[s.k] = s; });
+var ICON = {
+  cal:'<svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>',
+  chart:'<svg viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>',
+  cog:'<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.2"/><path d="M12 2.8v2.4M12 18.8v2.4M4.5 7.5l2 1.2M17.5 15.3l2 1.2M4.5 16.5l2-1.2M17.5 8.7l2-1.2"/></svg>',
+  chev:'<svg viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></svg>',
+  check:'<svg viewBox="0 0 24 24"><path d="M4 12.5l5.2 5.2L20 7"/></svg>',
+  pen:'<svg viewBox="0 0 24 24"><path d="M4 20h4L19 9a2.4 2.4 0 0 0-3.4-3.4L4.6 16.6 4 20z"/></svg>',
+  trash:'<svg viewBox="0 0 24 24"><path d="M4 7h16M9 7V4.6h6V7M6.5 7l.8 13h9.4l.8-13"/></svg>',
+  arrow:'<svg viewBox="0 0 24 24" style="width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round"><path d="M15 5l-7 7 7 7"/></svg>'
+};
+
+/* ===================== Zustand ===================== */
+var CFG = window.TP_CONFIG || {};
+var DB = null;           // wird nach der PIN-Eingabe vom Server geladen
+var REV = 0;             // Stand des Datenbestands (verhindert Überschreiben)
+var PIN = "";            // App-PIN dieser Sitzung
+var SHEETURL = "";       // Adresse der Google-Tabelle
+var UI = {view:"events", occ:null, statType:"all", statRange:"season", statSort:"quote", adminTab:"players"};
+var RO = false;          // Nur-Lese-Modus (in dieser Fassung nicht verwendet)
+var UNLOCKED = false;    // App-PIN eingegeben und Daten geladen
+var ADMIN_OK = false;    // Admin-PIN eingegeben
+var PINBUF = "";
+var BUSY = false;
+var LOADING = false;
+var FAIL = null;         // Text des letzten Verbindungsfehlers
+
+try {
+  var savedUI = sessionStorage.getItem("tp.ui");
+  if (savedUI) { var p = JSON.parse(savedUI); for (var k in p) UI[k] = p[k]; }
+} catch(e){}
+
+function normalize(d){
+  if (!d || typeof d !== "object") d = {};
+  d.v = 1;
+  d.settings = d.settings || {};
+  ["team","season","seasonStart","seasonEnd","pin","adminPin"].forEach(function(k){ d.settings[k] = d.settings[k] || ""; });
+  ["coaches","players","rules","singles","records"].forEach(function(k){ if (!Array.isArray(d[k])) d[k] = []; });
+  d.players.forEach(function(p){ delete p.birth; });   // Geburtsdaten werden bewusst nicht gespeichert
+  return d;
+}
+
+/* ===================== Hilfsfunktionen ===================== */
+function esc(s){
+  return String(s == null ? "" : s).replace(/[&<>"']/g, function(c){
+    return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c];
+  });
+}
+function uid(p){ return p + "-" + Math.random().toString(36).slice(2,8) + Date.now().toString(36).slice(-4); }
+function pad(n){ return (n < 10 ? "0" : "") + n; }
+function iso(d){ return d.getFullYear() + "-" + pad(d.getMonth()+1) + "-" + pad(d.getDate()); }
+function parseISO(s){
+  if (!s) return null;
+  var a = String(s).split("-");
+  if (a.length !== 3) return null;
+  var d = new Date(+a[0], +a[1]-1, +a[2]);
+  return isNaN(d.getTime()) ? null : d;
+}
+function todayISO(){ return iso(new Date()); }
+function addDays(isoStr, n){ var d = parseISO(isoStr); d.setDate(d.getDate()+n); return iso(d); }
+function dowOf(isoStr){ var d = parseISO(isoStr); return d ? d.getDay() : 0; }
+function fmtDate(isoStr){
+  var d = parseISO(isoStr); if (!d) return isoStr || "";
+  return DOW[d.getDay()] + ", " + d.getDate() + ". " + MON_S[d.getMonth()] + " " + d.getFullYear();
+}
+function fmtShort(isoStr){
+  var d = parseISO(isoStr); if (!d) return isoStr || "";
+  return DOW_S[d.getDay()] + " " + pad(d.getDate()) + "." + pad(d.getMonth()+1) + "." + String(d.getFullYear()).slice(2);
+}
+function fullName(p){ return ((p.first || "") + " " + (p.last || "")).trim(); }
+function sortName(a,b){
+  var x = ((a.last||"") + " " + (a.first||"")).toLowerCase();
+  var y = ((b.last||"") + " " + (b.first||"")).toLowerCase();
+  return x < y ? -1 : x > y ? 1 : 0;
+}
+function byId(list, id){ for (var i=0;i<list.length;i++) if (list[i].id === id) return list[i]; return null; }
+function pct(n, d){ return d > 0 ? Math.round((n/d)*100) : 0; }
+function typeLabel(t){ return t === "match" ? "Wettkampf" : "Training"; }
+function el(id){ return document.getElementById(id); }
+function timeRange(o){
+  if (!o.time) return "";
+  return o.timeEnd ? o.time + "\u2013" + o.timeEnd + " Uhr" : o.time + " Uhr";
+}
+
+/* ===================== Verbindung zum Server ===================== */
+function configured(){ return !!(CFG.apiUrl && /^https?:\/\//.test(CFG.apiUrl) && CFG.apiUrl.indexOf("HIER") < 0); }
+
+async function apiCall(payload){
+  if (!configured()) throw {error:"noconfig"};
+  var res = await fetch(CFG.apiUrl, {
+    method: "POST",
+    // text/plain vermeidet die Vorabanfrage, die Google-Skripte nicht beantworten
+    headers: {"Content-Type": "text/plain;charset=utf-8"},
+    body: JSON.stringify(payload)
+  });
+  if (!res.ok) throw {error:"http", status: res.status};
+  var data = await res.json();
+  if (!data || typeof data !== "object") throw {error:"bad_response"};
+  return data;
+}
+function apiLoad(pin){ return apiCall({action:"load", pin:pin}); }
+function apiSave(pin, state, rev){ return apiCall({action:"save", pin:pin, state:state, rev:rev}); }
+
+function failText(err){
+  var e = err && err.error;
+  if (e === "noconfig") return "Die App ist noch nicht mit der Google-Tabelle verbunden – in docs/config.js fehlt die Adresse des Skripts (siehe SETUP.md).";
+  if (e === "http") return "Der Server hat mit Fehler " + err.status + " geantwortet. Ist das Skript als Web-App für «alle» freigegeben?";
+  if (e === "busy") return "Gerade speichert jemand anderes. Bitte in ein paar Sekunden nochmals versuchen.";
+  if (e === "nopin") return "Im Google-Skript ist noch kein PIN gesetzt. Trage oben in der Datei Code.gs bei ERSTER_PIN einen PIN ein (siehe SETUP.md).";
+  return "Keine Verbindung zum Server. Internetverbindung prüfen und nochmals versuchen.";
+}
+
+function toast(msg){
+  var old = document.querySelector(".toast"); if (old) old.remove();
+  var t = document.createElement("div");
+  t.className = "toast"; t.setAttribute("role","status"); t.textContent = msg;
+  document.body.appendChild(t);
+  setTimeout(function(){ if (t.parentNode) t.remove(); }, 4200);
+}
+
+async function boot(pin){
+  if (!pin) { render(); return false; }
+  LOADING = true; FAIL = null; render();
+  try {
+    var r = await apiLoad(pin);
+    LOADING = false;
+    if (!r.ok) {
+      if (r.error === "pin") {
+        PINBUF = "";
+        try { localStorage.removeItem("tp.pin"); } catch(e){}
+        render(); shake(); toast("Falscher PIN.");
+        return false;
+      }
+      FAIL = r.message || failText({error: r.error}); render(); return false;
+    }
+    DB = normalize(r.state);
+    REV = Number(DB.rev || 0);
+    PIN = pin;
+    SHEETURL = r.sheetUrl || "";
+    UNLOCKED = true;
+    PINBUF = "";
+    try { localStorage.setItem("tp.pin", pin); } catch(e){}
+    checkAdmin();
+    render();
+    return true;
+  } catch(err) {
+    LOADING = false; FAIL = failText(err); render(); return false;
+  }
+}
+
+async function refresh(){
+  if (!UNLOCKED || BUSY || LOADING || UI.view === "record") return;
+  try {
+    var r = await apiLoad(PIN);
+    if (r.ok && Number(r.state.rev || 0) !== REV) {
+      DB = normalize(r.state); REV = Number(DB.rev || 0); render();
+      toast("Daten wurden auf den aktuellen Stand gebracht.");
+    }
+  } catch(err){ /* stiller Fehlschlag - der naechste Versuch folgt */ }
+}
+
+async function commit(mutate, msg, nextUI){
+  if (BUSY) return false;
+  var backup = JSON.stringify(DB);
+  BUSY = true;
+  try { mutate(DB); } catch(e){ BUSY = false; DB = JSON.parse(backup); throw e; }
+  render();
+  try {
+    var r = await apiSave(PIN, DB, REV);
+    BUSY = false;
+    if (r.ok) {
+      REV = Number(r.rev || REV + 1); DB.rev = REV;
+      if (nextUI) for (var k in nextUI) UI[k] = nextUI[k];
+      render();
+      if (msg) toast(msg);
+      return true;
+    }
+    if (r.error === "conflict" && r.state) {
+      DB = normalize(r.state); REV = Number(DB.rev || 0); render();
+      toast("Jemand anderes hat zuerst gespeichert. Der aktuelle Stand ist jetzt geladen – bitte nochmals eintragen.");
+      return false;
+    }
+    if (r.error === "pin") {
+      DB = JSON.parse(backup); UNLOCKED = false; PINBUF = "";
+      try { localStorage.removeItem("tp.pin"); } catch(e){}
+      render(); toast("Der PIN wurde geändert. Bitte neu anmelden.");
+      return false;
+    }
+    DB = JSON.parse(backup); render(); toast(r.message || failText({error: r.error}));
+    return false;
+  } catch(err) {
+    DB = JSON.parse(backup); BUSY = false; render();
+    toast(failText(err));
+    return false;
+  }
+}
+
+/* ===================== Datei-Download ===================== */
+function download(filename, text, mime){
+  try {
+    var blob = new Blob([text], {type: mime || "text/plain;charset=utf-8"});
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement("a");
+    a.href = url; a.download = filename; a.style.display = "none";
+    document.body.appendChild(a); a.click();
+    setTimeout(function(){ URL.revokeObjectURL(url); a.remove(); }, 2000);
+    return true;
+  } catch(e){ toast("Der Browser hat den Download blockiert."); return false; }
+}
+
+/* ===================== Termine / Vorkommen ===================== */
+function seasonFrom(){ return DB.settings.seasonStart || addDays(todayISO(), -180); }
+function seasonTo(){ return DB.settings.seasonEnd || addDays(todayISO(), 120); }
+
+function plannedOccurrences(fromISO, toISO){
+  var out = [], i;
+  var lo = fromISO, hi = toISO;
+  if (lo > hi) return out;
+  for (i = 0; i < DB.rules.length; i++) {
+    var r = DB.rules[i];
+    if (r.active === false) continue;
+    var s = r.from && r.from > lo ? r.from : lo;
+    var e = r.to && r.to < hi ? r.to : hi;
+    if (s > e) continue;
+    var d = parseISO(s), guard = 0;
+    while (d.getDay() !== Number(r.weekday) && guard++ < 7) d.setDate(d.getDate()+1);
+    while (iso(d) <= e && guard++ < 800) {
+      out.push({id: r.id + "|" + iso(d), date: iso(d), time: r.time || "", timeEnd: r.timeEnd || "", type: r.type, label: r.label || "", ruleId: r.id});
+      d.setDate(d.getDate()+7);
+    }
+  }
+  for (i = 0; i < DB.singles.length; i++) {
+    var g = DB.singles[i];
+    if (g.date >= lo && g.date <= hi) out.push({id: g.id, date: g.date, time: g.time || "", timeEnd: g.timeEnd || "", type: g.type, label: g.label || "", singleId: g.id});
+  }
+  return out;
+}
+function recordFor(occId){ return byId(DB.records, occId); }
+function sortByDate(a, b){
+  if (a.date !== b.date) return a.date < b.date ? -1 : 1;
+  return (a.time || "") < (b.time || "") ? -1 : (a.time || "") > (b.time || "") ? 1 : 0;
+}
+
+/* --- lokaler Entwurf (nur auf diesem Gerät) --- */
+function draftKey(id){ return "tp.draft." + id; }
+function loadDraft(id){
+  try { var s = localStorage.getItem(draftKey(id)); return s ? JSON.parse(s) : null; } catch(e){ return null; }
+}
+function saveDraft(id, d){ try { localStorage.setItem(draftKey(id), JSON.stringify(d)); } catch(e){} }
+function clearDraft(id){ try { localStorage.removeItem(draftKey(id)); } catch(e){} }
+
+function activePlayers(){ return DB.players.filter(function(p){ return p.active !== false; }).sort(sortName); }
+function activeCoaches(){ return DB.coaches.filter(function(c){ return c.active !== false; }).sort(sortName); }
+
+/* ===================== Ansicht: Termine ===================== */
+function viewEvents(){
+  var today = todayISO(), h = "";
+  var planned = plannedOccurrences(seasonFrom(), addDays(today, 21)).filter(function(o){ return !recordFor(o.id); });
+  var upcoming = planned.filter(function(o){ return o.date >= today; }).sort(sortByDate);
+  var missing  = planned.filter(function(o){ return o.date < today; }).sort(sortByDate).reverse();
+  var done     = DB.records.slice().sort(sortByDate).reverse();
+
+  if (!DB.players.length || (!DB.rules.length && !DB.singles.length && !DB.records.length)) {
+    h += '<div class="card empty" style="margin-bottom:14px"><b>Willkommen</b>'
+      + 'Lege im Bereich <strong>Admin</strong> zuerst die Spieler, die Trainer und die Trainings- bzw. Wettkampftage an. '
+      + 'Danach erscheinen hier alle Termine zum Erfassen.'
+      + '<div style="margin-top:14px"><button class="btn btn-primary" data-act="go" data-view="admin">Zum Admin-Bereich</button></div></div>';
+  }
+
+  h += '<div class="eyebrow">Heute &amp; demnächst</div>';
+  h += upcoming.length ? '<div class="stack">' + upcoming.slice(0,8).map(function(o){ return evCard(o, null, today); }).join("") + "</div>"
+     : '<div class="card empty">Keine geplanten Termine in den nächsten drei Wochen.</div>';
+
+  if (missing.length) {
+    h += '<div class="eyebrow">Nachzutragen</div><div class="stack">'
+      + missing.slice(0,25).map(function(o){ return evCard(o, null, today); }).join("") + "</div>";
+  }
+
+  h += '<div class="eyebrow">Erfasst</div>';
+  h += done.length ? '<div class="stack">' + done.slice(0,60).map(function(r){ return evCard(r, r, today); }).join("") + "</div>"
+     : '<div class="card empty">Noch keine abgeschlossene Anwesenheitserfassung.</div>';
+
+  h += '<div style="margin-top:18px"><button class="btn btn-block" data-act="adhoc">+ Termin ausserhalb des Plans erfassen</button></div>';
+  return h;
+}
+
+function evCard(o, rec, today){
+  var d = parseISO(o.date);
+  var late = !rec && o.date < today;
+  var cls = "ev" + (late ? " is-late" : "") + (o.date === today ? " is-today" : "");
+  var right;
+  if (rec) {
+    var n = 0, tot = 0;
+    for (var k in rec.entries) { tot++; if (rec.entries[k] === "present" || rec.entries[k] === "late") n++; }
+    right = '<span class="ev-quote">' + n + "/" + tot + "</span>";
+  } else {
+    right = loadDraft(o.id) ? '<span class="pill pill-open">Entwurf</span>' : ICON.chev;
+  }
+  var coaches = rec ? (rec.coachIds || []).map(function(id){
+        var c = byId(DB.coaches, id); return c ? fullName(c) : null;
+      }).filter(Boolean).join(", ") : "";
+  var meta = [];
+  if (o.time) meta.push('<span>' + esc(timeRange(o)) + "</span>");
+  if (rec) meta.push('<span>' + (coaches ? esc(coaches) : '<em>kein Trainer erfasst</em>') + "</span>");
+  else if (late) meta.push('<span style="color:var(--warn);font-weight:600">nicht erfasst</span>');
+
+  return '<button class="' + cls + '" data-act="open" data-occ="' + esc(o.id) + '">'
+    + '<span class="ev-date"><span class="ev-dow">' + DOW_S[d.getDay()] + "</span>"
+    + '<span class="ev-day">' + d.getDate() + "</span>"
+    + '<span class="ev-mon">' + MON_S[d.getMonth()] + "</span></span>"
+    + '<span class="ev-body"><span class="ev-title">' + esc(o.label || typeLabel(o.type)) + "</span>"
+    + '<span class="ev-meta"><span class="pill ' + (o.type === "match" ? "pill-match" : "pill-training") + '">' + typeLabel(o.type) + "</span>"
+    + meta.join("") + "</span></span>"
+    + '<span class="ev-side">' + right + "</span></button>";
+}
+
+/* ===================== Ansicht: Anwesenheit erfassen ===================== */
+function findOccurrence(id){
+  var rec = recordFor(id);
+  if (rec) return {id: rec.id, date: rec.date, time: rec.time, timeEnd: rec.timeEnd || "", type: rec.type, label: rec.label, rec: rec};
+  var all = plannedOccurrences(addDays(todayISO(), -800), addDays(todayISO(), 800));
+  for (var i=0;i<all.length;i++) if (all[i].id === id) return all[i];
+  if (UI.adhoc && UI.adhoc.id === id) return UI.adhoc;
+  return null;
+}
+
+function viewRecord(){
+  var occ = findOccurrence(UI.occ);
+  if (!occ) return '<div class="card empty"><b>Termin nicht gefunden</b>Der Termin wurde im Admin-Bereich verändert oder gelöscht.</div>';
+  var rec = occ.rec || null;
+  var draft = loadDraft(occ.id);
+  var state = draft || (rec ? {entries: Object.assign({}, rec.entries), coachIds: (rec.coachIds || []).slice(), note: rec.note || ""}
+                            : {entries: {}, coachIds: [], note: ""});
+  UI.state = state;
+
+  var players = activePlayers();
+  if (rec) { // auch inaktive Spieler zeigen, die in dieser Erfassung enthalten sind
+    DB.players.forEach(function(p){
+      if (p.active === false && rec.entries && rec.entries[p.id] && players.indexOf(p) < 0) players.push(p);
+    });
+    players.sort(sortName);
+  }
+  var coaches = activeCoaches();
+
+  var h = '<div class="card sheet-head">'
+    + '<div class="row" style="gap:8px"><span class="pill ' + (occ.type === "match" ? "pill-match" : "pill-training") + '">' + typeLabel(occ.type) + "</span>"
+    + (rec ? '<span class="pill pill-done">abgeschlossen</span>' : "")
+    + (draft && !rec ? '<span class="pill pill-open">Entwurf auf diesem Gerät</span>' : "") + "</div>"
+    + '<div class="sheet-title">' + esc(occ.label || typeLabel(occ.type)) + "</div>"
+    + '<div class="muted small">' + fmtDate(occ.date) + (occ.time ? " &middot; " + esc(timeRange(occ)) : "") + "</div>"
+    + "</div>";
+
+  h += '<div class="eyebrow">Anwesende Trainer</div>';
+  if (!coaches.length) {
+    h += '<div class="card empty">Noch keine Trainer erfasst. <button class="btn btn-sm" data-act="go" data-view="admin" data-tab="coaches" style="margin-top:10px">Trainer anlegen</button></div>';
+  } else {
+    h += '<div class="wrap">' + coaches.map(function(c){
+      var on = state.coachIds.indexOf(c.id) >= 0;
+      return '<button class="coach" data-act="coach" data-id="' + c.id + '" aria-pressed="' + on + '">'
+        + (on ? ICON.check : "") + esc(fullName(c)) + (c.role ? ' <span class="muted small">' + esc(c.role) + "</span>" : "") + "</button>";
+    }).join("") + "</div>";
+  }
+
+  h += '<div class="eyebrow">Spieler <span class="muted" style="text-transform:none;letter-spacing:0;font-family:inherit">(' + players.length + ")</span></div>";
+  if (!players.length) {
+    h += '<div class="card empty">Noch keine Spieler erfasst. <button class="btn btn-sm" data-act="go" data-view="admin" data-tab="players" style="margin-top:10px">Spieler anlegen</button></div>';
+  } else {
+    h += '<div class="wrap" style="margin-bottom:10px">'
+      + '<button class="btn btn-sm" data-act="all" data-status="present">Alle anwesend</button>'
+      + '<button class="btn btn-sm" data-act="all" data-status="">Zurücksetzen</button></div>';
+    h += '<div class="card"><ul class="plist">' + players.map(function(p){
+      return '<li data-player="' + p.id + '"><span class="pname"><b>' + esc(p.last) + "</b>, " + esc(p.first)
+        + (p.active === false ? ' <small>nicht mehr im Kader</small>' : "") + "</span>"
+        + '<span class="seg">' + STATUS.map(function(s){
+            var on = state.entries[p.id] === s.k;
+            return '<button class="' + s.cls + '" data-act="mark" data-player="' + p.id + '" data-status="' + s.k + '" '
+              + 'aria-pressed="' + on + '" aria-label="' + s.label + " – " + esc(fullName(p)) + '" title="' + s.label + '">' + s.ab + "</button>";
+          }).join("") + "</span></li>";
+    }).join("") + "</ul></div>";
+    h += '<div class="legend" style="margin-top:8px">' + STATUS.map(function(s){
+      return '<span><i style="background:' + s.color + '"></i>' + s.ab + " &middot; " + s.label + "</span>";
+    }).join("") + "</div>";
+  }
+
+  h += '<div class="eyebrow">Notiz (optional)</div>'
+    + '<textarea data-act="note" placeholder="z. B. Platzverhältnisse, Testspiel, besondere Vorkommnisse">' + esc(state.note) + "</textarea>";
+
+  h += '<div id="tally" class="card" style="padding:12px 13px;margin-top:14px">' + tallyHtml(state, players.length) + "</div>";
+
+  if (!RO) {
+    h += '<div class="actionbar"><div class="stack-s">'
+      + '<button class="btn btn-primary btn-block" data-act="save">' + (rec ? "Änderungen speichern" : "Anwesenheit abschliessen") + "</button>"
+      + (rec ? '<button class="btn btn-danger btn-block btn-sm" data-act="delrec">' + (UI.confirm === "rec" ? "Wirklich löschen? Nochmals tippen" : "Erfassung löschen") + '</button>'
+             : (draft ? '<button class="btn btn-ghost btn-block btn-sm" data-act="dropdraft">Entwurf verwerfen</button>' : ""))
+      + "</div></div>";
+  } else {
+    h += '<div class="banner" style="margin-top:14px">Nur-Lese-Zugriff: Diese Ansicht kann keine Erfassung speichern.</div>';
+  }
+  if (rec && rec.updatedAt) {
+    h += '<p class="small muted" style="margin-top:14px">Zuletzt gespeichert am ' + esc(rec.updatedAt)
+      + (rec.updatedBy ? " von " + esc(rec.updatedBy) : "") + ".</p>";
+  }
+  return h;
+}
+
+function tallyHtml(state, total){
+  var counts = {present:0, late:0, excused:0, absent:0}, set = 0;
+  for (var k in state.entries) { if (counts[state.entries[k]] !== undefined) { counts[state.entries[k]]++; set++; } }
+  var here = counts.present + counts.late;
+  return '<div class="row" style="justify-content:space-between;gap:10px;flex-wrap:wrap">'
+    + '<span class="tally">' + STATUS.map(function(s){
+        return '<span class="pill" style="background:var(--surface-2);color:var(--ink-2)"><i style="width:9px;height:9px;border-radius:3px;display:inline-block;background:' + s.color + '"></i>' + s.label + ' <b>' + counts[s.k] + "</b></span>";
+      }).join("") + "</span>"
+    + '<span class="disp tnum" style="font-size:20px">' + here + "/" + total + " anwesend</span></div>"
+    + (set < total ? '<p class="small muted" style="margin:8px 0 0">' + (total - set) + " Spieler noch ohne Eintrag – ohne Eintrag zählt der Spieler für diesen Termin nicht in die Statistik.</p>" : "");
+}
+
+/* ===================== Ansicht: Auswertung ===================== */
+function statRecords(){
+  var recs = DB.records.slice();
+  if (UI.statType !== "all") recs = recs.filter(function(r){ return r.type === UI.statType; });
+  if (UI.statRange !== "season") {
+    var days = UI.statRange === "30" ? 30 : 90;
+    var lim = addDays(todayISO(), -days);
+    recs = recs.filter(function(r){ return r.date >= lim; });
+  } else {
+    var s = DB.settings.seasonStart, e = DB.settings.seasonEnd;
+    if (s) recs = recs.filter(function(r){ return r.date >= s; });
+    if (e) recs = recs.filter(function(r){ return r.date <= e; });
+  }
+  return recs.sort(sortByDate);
+}
+function playerStats(recs){
+  var map = {};
+  DB.players.forEach(function(p){ map[p.id] = {p:p, present:0, late:0, excused:0, absent:0, total:0}; });
+  recs.forEach(function(r){
+    for (var pid in r.entries) {
+      var st = r.entries[pid];
+      if (!map[pid]) { var pl = byId(DB.players, pid); if (!pl) continue; map[pid] = {p:pl, present:0, late:0, excused:0, absent:0, total:0}; }
+      if (map[pid][st] === undefined) continue;
+      map[pid][st]++; map[pid].total++;
+    }
+  });
+  var arr = [];
+  for (var k in map) { var s = map[k]; s.here = s.present + s.late; s.quote = pct(s.here, s.total); arr.push(s); }
+  return arr;
+}
+
+function viewStats(){
+  var recs = statRecords();
+  var stats = playerStats(recs).filter(function(s){ return s.total > 0 || s.p.active !== false; });
+  if (UI.statSort === "quote") stats.sort(function(a,b){ return b.quote - a.quote || sortName(a.p, b.p); });
+  else stats.sort(function(a,b){ return sortName(a.p, b.p); });
+
+  var sumHere = 0, sumTot = 0;
+  stats.forEach(function(s){ sumHere += s.here; sumTot += s.total; });
+  var nTrain = recs.filter(function(r){ return r.type === "training"; }).length;
+  var nMatch = recs.filter(function(r){ return r.type === "match"; }).length;
+
+  var h = '<div class="seglist" style="margin-bottom:10px">'
+    + [["all","Alle"],["training","Training"],["match","Wettkampf"]].map(function(o){
+        return '<button data-act="stype" data-v="' + o[0] + '" aria-pressed="' + (UI.statType === o[0]) + '">' + o[1] + "</button>";
+      }).join("") + "</div>"
+    + '<div class="seglist">'
+    + [["season","Ganze Saison"],["90","90 Tage"],["30","30 Tage"]].map(function(o){
+        return '<button data-act="srange" data-v="' + o[0] + '" aria-pressed="' + (UI.statRange === o[0]) + '">' + o[1] + "</button>";
+      }).join("") + "</div>";
+
+  h += '<div class="eyebrow">Überblick</div><div class="kpis">'
+    + kpi(pct(sumHere, sumTot) + "%", "Gesamtquote")
+    + kpi(recs.length, "Erfasste Termine")
+    + kpi(nTrain, "Trainings")
+    + kpi(nMatch, "Wettkämpfe") + "</div>";
+
+  h += '<div class="eyebrow">Anwesenheit pro Spieler<button class="btn btn-sm" data-act="ssort" style="margin-left:4px">'
+    + (UI.statSort === "quote" ? "Nach Quote" : "Nach Name") + "</button></div>";
+  if (!stats.length || !sumTot) {
+    h += '<div class="card empty"><b>Noch keine Daten</b>Sobald eine Anwesenheit abgeschlossen ist, erscheint hier die Auswertung.</div>';
+  } else {
+    h += '<div class="card">' + stats.map(function(s){
+      var seg = STATUS.map(function(st){
+        var w = s.total ? (s[st.k] / s.total) * 100 : 0;
+        return w > 0 ? '<i class="b-' + st.k + '" style="width:' + w + '%"></i>' : "";
+      }).join("");
+      return '<div class="prow"><div class="prow-main">'
+        + '<span class="prow-name">' + esc(s.p.last) + ", " + esc(s.p.first) + (s.p.active === false ? ' <span class="muted small">(inaktiv)</span>' : "") + "</span>"
+        + '<span class="bar">' + seg + "</span>"
+        + '<span class="prow-sub">' + s.here + " von " + s.total + " &middot; A " + s.present + " &middot; V " + s.late + " &middot; E " + s.excused + " &middot; F " + s.absent + "</span>"
+        + '</div><span class="prow-num">' + s.quote + "%</span></div>";
+    }).join("") + "</div>";
+    h += '<div class="legend" style="margin-top:8px">' + STATUS.map(function(st){
+      return '<span><i style="background:' + st.color + '"></i>' + st.label + "</span>";
+    }).join("") + '<span class="muted">Quote = (Anwesend + Verspätet) / erfasste Termine</span></div>';
+  }
+
+  var cstats = activeCoaches().map(function(c){
+    return {c:c, n: recs.filter(function(r){ return (r.coachIds || []).indexOf(c.id) >= 0; }).length};
+  }).sort(function(a,b){ return b.n - a.n; });
+  if (cstats.length) {
+    h += '<div class="eyebrow">Trainereinsätze</div><div class="card">' + cstats.map(function(s){
+      return '<div class="item"><span class="grow"><b>' + esc(fullName(s.c)) + "</b>"
+        + (s.c.role ? ' <span class="muted small">' + esc(s.c.role) + "</span>" : "") + "</span>"
+        + '<span class="disp tnum" style="font-size:18px">' + s.n + "</span></div>";
+    }).join("") + "</div>";
+  }
+
+  h += '<div class="eyebrow">Einzelne Termine</div>';
+  if (recs.length) {
+    h += '<div class="card tblwrap"><table class="grid"><thead><tr><th>Datum</th><th>Art</th><th>Trainer</th><th class="num">Anwesend</th><th class="num">Quote</th></tr></thead><tbody>'
+      + recs.slice().reverse().map(function(r){
+          var here = 0, tot = 0;
+          for (var k in r.entries) { tot++; if (r.entries[k] === "present" || r.entries[k] === "late") here++; }
+          var cn = (r.coachIds || []).map(function(id){ var c = byId(DB.coaches, id); return c ? (c.first ? c.first.charAt(0) + ". " : "") + c.last : null; }).filter(Boolean).join(", ");
+          return "<tr><td>" + fmtShort(r.date) + "</td><td>" + typeLabel(r.type) + "</td><td>" + (esc(cn) || "&ndash;")
+            + '</td><td class="num">' + here + "/" + tot + '</td><td class="num">' + pct(here, tot) + "%</td></tr>";
+        }).join("") + "</tbody></table></div>";
+  } else {
+    h += '<div class="card empty">Keine Termine im gewählten Zeitraum.</div>';
+  }
+
+  h += '<div class="stack-s" style="margin-top:18px">'
+    + '<button class="btn btn-primary btn-block" data-act="report">Bericht &amp; Druckansicht (PDF)</button>'
+    + '<button class="btn btn-block" data-act="export">Für Excel exportieren (CSV)</button></div>';
+  return h;
+}
+function kpi(v, l){ return '<div class="card kpi"><b>' + v + "</b><span>" + l + "</span></div>"; }
+
+function exportCsv(){
+  var recs = statRecords(), stats = playerStats(recs).sort(function(a,b){ return sortName(a.p, b.p); });
+  var sep = ";", nl = "\r\n";
+  function q(v){ v = String(v == null ? "" : v); return /[";\r\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; }
+  var lines = [];
+  lines.push([q("Team"), q(DB.settings.team || "")].join(sep));
+  lines.push([q("Saison"), q(DB.settings.season || "")].join(sep));
+  lines.push([q("Export"), q(fmtDate(todayISO()))].join(sep));
+  lines.push("");
+  lines.push(["Nachname","Vorname","Quote %","Anwesend","Verspätet","Entschuldigt","Fehlt","Erfasste Termine"].map(q).join(sep));
+  stats.forEach(function(s){
+    lines.push([s.p.last, s.p.first, s.quote, s.present, s.late, s.excused, s.absent, s.total].map(q).join(sep));
+  });
+  lines.push("");
+  lines.push(["Datum","Wochentag","Uhrzeit","Art","Bezeichnung","Trainer","Anwesend","Erfasst","Notiz"].map(q).join(sep));
+  recs.forEach(function(r){
+    var here = 0, tot = 0;
+    for (var k in r.entries) { tot++; if (r.entries[k] === "present" || r.entries[k] === "late") here++; }
+    var cn = (r.coachIds || []).map(function(id){ var c = byId(DB.coaches, id); return c ? fullName(c) : null; }).filter(Boolean).join(", ");
+    lines.push([r.date, DOW[dowOf(r.date)], r.time || "", typeLabel(r.type), r.label || "", cn, here, tot, r.note || ""].map(q).join(sep));
+  });
+  lines.push("");
+  lines.push(["Matrix: Spieler x Termin (A=Anwesend, V=Verspätet, E=Entschuldigt, F=Fehlt)"].map(q).join(sep));
+  lines.push(["Nachname","Vorname"].concat(recs.map(function(r){ return fmtShort(r.date) + " " + (r.type === "match" ? "W" : "T"); })).map(q).join(sep));
+  stats.forEach(function(s){
+    lines.push([s.p.last, s.p.first].concat(recs.map(function(r){
+      var st = r.entries[s.p.id]; return st ? SK[st].ab : "";
+    })).map(q).join(sep));
+  });
+  var csv = "﻿" + lines.join(nl);
+  var base = "anwesenheit-" + (DB.settings.team || "team").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") + "-" + todayISO();
+  if (download(base + ".csv", csv, "text/csv;charset=utf-8")) toast("CSV gespeichert.");
+}
+
+/* ===================== Ansicht: Admin ===================== */
+var ADMIN_TABS = [["players","Spieler"],["coaches","Trainer"],["plan","Termine"],["settings","Team"]];
+
+function viewAdmin(){
+  var h = '<div class="tabs">' + ADMIN_TABS.map(function(t){
+    return '<button data-act="atab" data-v="' + t[0] + '" aria-pressed="' + (UI.adminTab === t[0]) + '">' + t[1] + "</button>";
+  }).join("") + "</div>";
+  if (RO) h += '<div class="banner" style="margin-top:12px">Nur-Lese-Zugriff: Änderungen können in dieser Ansicht nicht gespeichert werden.</div>';
+  if (UI.adminTab === "players") h += adminPeople("players");
+  else if (UI.adminTab === "coaches") h += adminPeople("coaches");
+  else if (UI.adminTab === "plan") h += adminPlan();
+  else h += adminSettings();
+  return h;
+}
+
+function confirmRow(id, text, act, extra){
+  if (UI.confirm !== id) return '<button class="iconbtn" data-act="ask" data-id="' + esc(id) + '" title="Löschen" aria-label="Löschen">' + ICON.trash + "</button>";
+  return '<span class="row" style="gap:6px"><button class="btn btn-sm btn-danger" data-act="' + act + '" data-id="' + esc(id) + '" ' + (extra || "") + '>' + text + "</button>"
+    + '<button class="btn btn-sm btn-ghost" data-act="ask" data-id="">Abbrechen</button></span>';
+}
+
+function adminPeople(kind){
+  var isP = kind === "players";
+  var list = (isP ? DB.players : DB.coaches).slice().sort(sortName);
+  var h = '<div class="eyebrow">' + (isP ? "Kader" : "Trainerteam") + " (" + list.length + ")</div>";
+  h += list.length ? '<div class="card">' + list.map(function(p){
+      if (UI.edit && UI.edit.kind === kind && UI.edit.id === p.id) {
+        return '<div class="item" style="flex-wrap:wrap"><div class="formgrid" style="width:100%">'
+          + field("e-first", "Vorname", '<input type="text" id="e-first" value="' + esc(p.first) + '">')
+          + field("e-last", "Nachname", '<input type="text" id="e-last" value="' + esc(p.last) + '">')
+          + (isP ? "" : field("e-role", "Funktion", '<input type="text" id="e-role" value="' + esc(p.role || "") + '">'))
+          + '</div><div class="wrap" style="width:100%;margin-top:8px">'
+          + '<button class="btn btn-sm btn-primary" data-act="saveperson" data-kind="' + kind + '" data-id="' + p.id + '">Speichern</button>'
+          + '<button class="btn btn-sm btn-ghost" data-act="canceledit">Abbrechen</button></div></div>';
+      }
+      return '<div class="item' + (p.active === false ? " off" : "") + '"><span class="grow"><b>' + esc(p.last) + "</b>, " + esc(p.first)
+        + (p.role ? ' <span class="muted small">' + esc(p.role) + "</span>" : "")
+        + (p.active === false ? ' <span class="pill pill-done">inaktiv</span>' : "") + "</span>"
+        + '<button class="iconbtn" data-act="editperson" data-kind="' + kind + '" data-id="' + p.id + '" title="Bearbeiten" aria-label="Bearbeiten">' + ICON.pen + "</button>"
+        + '<button class="btn btn-sm" data-act="toggleperson" data-kind="' + kind + '" data-id="' + p.id + '">' + (p.active === false ? "Aktivieren" : "Pausieren") + "</button>"
+        + confirmRow(p.id, "Löschen", "delperson", 'data-kind="' + kind + '"') + "</div>";
+    }).join("") + "</div>"
+    : '<div class="card empty">Noch niemand erfasst.</div>';
+
+  h += '<div class="eyebrow">Hinzufügen</div><div class="card" style="padding:13px"><div class="formgrid">'
+    + field("n-first", "Vorname", '<input type="text" id="n-first" autocomplete="off" placeholder="Vorname">')
+    + field("n-last", "Nachname", '<input type="text" id="n-last" autocomplete="off" placeholder="Nachname">')
+    + (isP ? "" : field("n-role", "Funktion (optional)", '<input type="text" id="n-role" autocomplete="off" placeholder="z. B. Assistenztrainer">'))
+    + '</div><button class="btn btn-primary btn-block" style="margin-top:10px" data-act="addperson" data-kind="' + kind + '">Hinzufügen</button></div>';
+
+  h += '<div class="eyebrow">Mehrere auf einmal</div><div class="card" style="padding:13px">'
+    + '<p class="small muted" style="margin:0 0 8px">Eine Person pro Zeile – <code>Vorname Nachname</code> oder <code>Nachname, Vorname</code>.</p>'
+    + '<textarea id="bulk" placeholder="Luca Meier&#10;Meier, Jonas"></textarea>'
+    + '<button class="btn btn-block" style="margin-top:10px" data-act="bulk" data-kind="' + kind + '">Liste übernehmen</button></div>';
+  return h;
+}
+function field(id, label, input){ return '<label class="f" for="' + id + '">' + label + input + "</label>"; }
+
+function adminPlan(){
+  var h = '<div class="eyebrow">Wöchentliche Termine</div>'
+    + '<p class="small muted" style="margin:-4px 0 10px">Jede Serie erzeugt automatisch alle Termine der Saison – Training oder Wettkampf.</p>';
+  var rules = DB.rules.slice().sort(function(a,b){ return (a.weekday - b.weekday) || ((a.time||"") < (b.time||"") ? -1 : 1); });
+  h += rules.length ? '<div class="card">' + rules.map(function(r){
+      return '<div class="item' + (r.active === false ? " off" : "") + '"><span class="grow"><b>' + DOW[r.weekday] + "</b>"
+        + (r.time ? " &middot; " + esc(timeRange(r)) : "")
+        + '<br><span class="small muted"><span class="pill ' + (r.type === "match" ? "pill-match" : "pill-training") + '">' + typeLabel(r.type) + "</span> "
+        + esc(r.label || "") + (r.from || r.to ? " &middot; " + (r.from ? "ab " + fmtShort(r.from) : "") + (r.to ? " bis " + fmtShort(r.to) : "") : "") + "</span></span>"
+        + '<button class="btn btn-sm" data-act="togglerule" data-id="' + r.id + '">' + (r.active === false ? "Aktivieren" : "Pausieren") + "</button>"
+        + confirmRow(r.id, "Löschen", "delrule") + "</div>";
+    }).join("") + "</div>"
+    : '<div class="card empty">Noch keine wöchentlichen Termine.</div>';
+
+  h += '<div class="card" style="padding:13px;margin-top:12px"><div class="formgrid">'
+    + field("r-type", "Art", '<select id="r-type"><option value="training">Training</option><option value="match">Wettkampf</option></select>')
+    + field("r-day", "Wochentag", '<select id="r-day">' + DOW.map(function(d, i){ return '<option value="' + i + '"' + (i === 2 ? " selected" : "") + ">" + d + "</option>"; }).join("") + "</select>")
+    + field("r-time", "Von", '<input type="time" id="r-time" value="18:00">')
+    + field("r-end", "Bis", '<input type="time" id="r-end" value="19:30">')
+    + '</div><div class="formgrid" style="margin-top:10px">'
+    + field("r-label", "Bezeichnung (optional)", '<input type="text" id="r-label" placeholder="z. B. Haupttraining">')
+    + '</div><div class="formgrid" style="margin-top:10px">'
+    + field("r-from", "Gültig ab", '<input type="date" id="r-from" value="' + esc(DB.settings.seasonStart || "") + '">')
+    + field("r-to", "Gültig bis", '<input type="date" id="r-to" value="' + esc(DB.settings.seasonEnd || "") + '">')
+    + '</div><button class="btn btn-primary btn-block" style="margin-top:10px" data-act="addrule">Serie hinzufügen</button></div>';
+
+  h += '<div class="eyebrow">Einzeltermine</div>';
+  var sing = DB.singles.slice().sort(sortByDate).reverse();
+  h += sing.length ? '<div class="card">' + sing.map(function(g){
+      return '<div class="item"><span class="grow"><b>' + fmtShort(g.date) + "</b>" + (g.time ? " &middot; " + esc(timeRange(g)) : "")
+        + '<br><span class="small muted"><span class="pill ' + (g.type === "match" ? "pill-match" : "pill-training") + '">' + typeLabel(g.type) + "</span> " + esc(g.label || "") + "</span></span>"
+        + confirmRow(g.id, "Löschen", "delsingle") + "</div>";
+    }).join("") + "</div>"
+    : '<div class="card empty">Noch keine Einzeltermine.</div>';
+
+  h += '<div class="card" style="padding:13px;margin-top:12px"><div class="formgrid">'
+    + field("s-type", "Art", '<select id="s-type"><option value="match">Wettkampf</option><option value="training">Training</option></select>')
+    + field("s-date", "Datum", '<input type="date" id="s-date" value="' + todayISO() + '">')
+    + field("s-time", "Von", '<input type="time" id="s-time" value="10:00">')
+    + field("s-end", "Bis", '<input type="time" id="s-end" value="">')
+    + '</div><div class="formgrid" style="margin-top:10px">'
+    + field("s-label", "Bezeichnung (optional)", '<input type="text" id="s-label" placeholder="z. B. Meisterschaftsspiel gegen FC Muster">')
+    + '</div><button class="btn btn-primary btn-block" style="margin-top:10px" data-act="addsingle">Einzeltermin hinzufügen</button></div>';
+  return h;
+}
+
+function adminSettings(){
+  var s = DB.settings;
+  return '<div class="eyebrow">Team &amp; Saison</div><div class="card" style="padding:13px"><div class="formgrid">'
+    + field("t-team", "Teamname", '<input type="text" id="t-team" value="' + esc(s.team) + '" placeholder="z. B. FC Muster Ea">')
+    + field("t-season", "Saison", '<input type="text" id="t-season" value="' + esc(s.season) + '" placeholder="z. B. 2025/26">')
+    + '</div><div class="formgrid" style="margin-top:10px">'
+    + field("t-start", "Saisonstart", '<input type="date" id="t-start" value="' + esc(s.seasonStart) + '">')
+    + field("t-end", "Saisonende", '<input type="date" id="t-end" value="' + esc(s.seasonEnd) + '">')
+    + '</div><div class="formgrid" style="margin-top:10px">'
+    + field("t-pin", "App-PIN", '<input type="text" inputmode="numeric" id="t-pin" value="' + esc(s.pin) + '" placeholder="leer = kein Schutz">')
+    + field("t-apin", "Admin-PIN", '<input type="text" inputmode="numeric" id="t-apin" value="' + esc(s.adminPin) + '" placeholder="leer = kein Schutz">')
+    + '</div><button class="btn btn-primary btn-block" style="margin-top:10px" data-act="savesettings">Speichern</button></div>'
+    + '<div class="eyebrow">Zugriff</div><div class="card" style="padding:13px">'
+    + '<p class="small muted" style="margin:0">Die App ist über ihre Adresse für alle erreichbar – den Zugang regelt der <strong>App-PIN</strong>. '
+    + 'Ohne ihn gibt der Server keine Daten heraus. Wer den PIN hat, kann Anwesenheiten erfassen und bearbeiten.</p>'
+    + '<p class="small muted" style="margin:10px 0 0">Der <strong>Admin-PIN</strong> schützt diesen Bereich vor versehentlichen Änderungen, ist aber kein zweiter Sicherheitsriegel. '
+    + 'Gib den App-PIN nur im Trainerteam weiter und ändere ihn, wenn jemand das Team verlässt.</p>'
+    + '<button class="btn btn-block noprint" style="margin-top:12px" data-act="lock">Auf diesem Gerät abmelden</button></div>'
+    + '<div class="eyebrow">Daten</div><div class="card" style="padding:13px">'
+    + '<p class="small muted" style="margin:0 0 10px">Alle Anwesenheiten stehen laufend auch in der Google-Tabelle – dort lassen sie sich ansehen und '
+    + 'über <em>Datei &rarr; Herunterladen &rarr; Microsoft Excel</em> als xlsx speichern.</p>'
+    + (SHEETURL ? '<button class="btn btn-block btn-primary" data-act="sheet">Google-Tabelle öffnen</button>' : '')
+    + '<p class="small muted" style="margin:12px 0 10px">Zusätzlich: Sicherungskopie aller Daten als JSON-Datei.</p>'
+    + '<button class="btn btn-block" data-act="backup">Sicherung herunterladen</button></div>'
+    + '<p class="small muted" style="margin-top:16px">' + DB.players.length + " Spieler &middot; " + DB.coaches.length + " Trainer &middot; "
+    + DB.records.length + " erfasste Termine</p>";
+}
+
+/* ===================== Ad-hoc-Termin ===================== */
+function viewAdhoc(){
+  return '<div class="card empty" style="text-align:left;padding:16px"><b style="font-size:17px">Termin ausserhalb des Plans</b>'
+    + '<p class="small muted" style="margin:2px 0 14px">Für ein zusätzliches Training, ein Turnier oder ein Testspiel. Der Termin wird zusammen mit der Anwesenheit gespeichert.</p>'
+    + '<div class="formgrid">'
+    + field("a-type", "Art", '<select id="a-type"><option value="training">Training</option><option value="match">Wettkampf</option></select>')
+    + field("a-date", "Datum", '<input type="date" id="a-date" value="' + todayISO() + '">')
+    + field("a-time", "Von", '<input type="time" id="a-time" value="18:00">')
+    + field("a-end", "Bis", '<input type="time" id="a-end" value="19:30">')
+    + '</div><div class="formgrid" style="margin-top:10px">'
+    + field("a-label", "Bezeichnung (optional)", '<input type="text" id="a-label" placeholder="z. B. Zusatztraining">')
+    + '</div><button class="btn btn-primary btn-block" style="margin-top:12px" data-act="adhocgo">Weiter zur Anwesenheit</button></div>';
+}
+
+/* ===================== PIN-Sperre ===================== */
+function storedPin(){ try { return localStorage.getItem("tp.pin") || ""; } catch(e){ return ""; } }
+function pinOf(kind){ return kind === "admin" ? ((DB && DB.settings.adminPin) || "") : PIN; }
+function pinLength(kind){ return kind === "admin" ? (pinOf("admin").length || 4) : 4; }
+function checkAdmin(){
+  ADMIN_OK = !DB.settings.adminPin;
+  try { if (!ADMIN_OK && sessionStorage.getItem("tp.admin") === DB.settings.adminPin) ADMIN_OK = true; } catch(e){}
+}
+function shake(){
+  var l = el("lock");
+  if (l) { l.classList.add("bad"); setTimeout(function(){ l.classList.remove("bad"); }, 400); }
+}
+function viewLock(kind){
+  var len = pinLength(kind);
+  var dots = "";
+  for (var i = 0; i < len; i++) dots += '<i class="' + (i < PINBUF.length ? "on" : "") + '"></i>';
+  var keys = "";
+  [1,2,3,4,5,6,7,8,9].forEach(function(n){ keys += '<button data-act="pin" data-d="' + n + '">' + n + "</button>"; });
+  keys += '<button class="wide" data-act="pinclear">Löschen</button>'
+        + '<button data-act="pin" data-d="0">0</button>'
+        + '<button class="wide" data-act="pindel">&#9003;</button>';
+  var extra = kind === "app"
+    ? '<button class="btn btn-primary btn-block" data-act="pinok"' + (LOADING ? " disabled" : "") + ">"
+      + (LOADING ? "Bitte warten …" : "Weiter") + "</button>"
+    : "";
+  return '<div class="lock" id="lock"><div class="lock-card">'
+    + '<div class="lock-mark">' + (kind === "admin" ? "A" : "⚽") + "</div>"
+    + '<div class="lock-title">' + (kind === "admin" ? "Admin-Bereich" : (DB ? esc(DB.settings.team || TITLE) : TITLE)) + "</div>"
+    + '<p class="lock-sub">' + (kind === "admin" ? "Admin-PIN eingeben" : (LOADING ? "Daten werden geladen …" : "PIN eingeben")) + "</p>"
+    + '<div class="dots">' + dots + "</div>"
+    + '<div class="keys">' + keys + "</div>"
+    + (extra ? '<div style="width:100%;max-width:262px">' + extra + "</div>" : "")
+    + (FAIL ? '<div class="banner" style="text-align:left">' + esc(FAIL)
+        + '<div style="margin-top:10px"><button class="btn btn-sm" data-act="retry">Nochmals versuchen</button></div></div>' : "")
+    + "</div></div>";
+}
+function submitPin(kind){
+  if (kind === "admin") {
+    if (PINBUF === pinOf("admin")) {
+      try { sessionStorage.setItem("tp.admin", PINBUF); } catch(e){}
+      PINBUF = ""; ADMIN_OK = true; render();
+    } else {
+      PINBUF = ""; render(); shake(); toast("Falscher Admin-PIN.");
+    }
+    return;
+  }
+  boot(PINBUF);   // der App-PIN wird auf dem Server geprüft
+}
+
+/* ===================== Bericht / Druckansicht ===================== */
+function viewReport(){
+  var recs = statRecords();
+  var stats = playerStats(recs).filter(function(x){ return x.total > 0 || x.p.active !== false; }).sort(function(a,b){ return sortName(a.p, b.p); });
+  var sumHere = 0, sumTot = 0;
+  stats.forEach(function(x){ sumHere += x.here; sumTot += x.total; });
+  var zeit = UI.statRange === "season"
+    ? ((DB.settings.seasonStart ? fmtShort(DB.settings.seasonStart) : "Saisonbeginn") + " bis " + (DB.settings.seasonEnd ? fmtShort(DB.settings.seasonEnd) : "Saisonende"))
+    : ("letzte " + UI.statRange + " Tage");
+  var art = UI.statType === "all" ? "Training und Wettkampf" : typeLabel(UI.statType);
+
+  var h = '<div class="stack-s noprint" style="margin-bottom:14px">'
+    + '<button class="btn btn-primary btn-block" data-act="print">Drucken / als PDF sichern</button>'
+    + '<button class="btn btn-block" data-act="export">Für Excel exportieren (CSV)</button>'
+    + '<p class="small muted" style="margin:2px 0 0">Öffnet sich kein Druckdialog, im Browsermenü «Drucken» wählen – dort lässt sich «Als PDF sichern» auswählen.</p></div>';
+
+  h += '<div class="report">'
+    + '<div class="rep-head"><b>' + esc(DB.settings.team || TITLE) + "</b>"
+    + "<span>Anwesenheitsbericht &middot; Saison " + esc(DB.settings.season || "–") + " &middot; " + esc(art)
+    + "<br>Zeitraum: " + esc(zeit) + " &middot; erstellt am " + fmtDate(todayISO()) + "</span></div>";
+
+  h += "<h2>Überblick</h2>"
+    + '<div class="tblwrap"><table class="grid" style="width:auto;min-width:min(100%,420px)">'
+    + "<thead><tr><th>Erfasste Termine</th><th>Trainings</th><th>Wettkämpfe</th><th>Spieler</th><th>Gesamtquote</th></tr></thead><tbody><tr>"
+    + '<td class="num">' + recs.length + "</td>"
+    + '<td class="num">' + recs.filter(function(r){ return r.type === "training"; }).length + "</td>"
+    + '<td class="num">' + recs.filter(function(r){ return r.type === "match"; }).length + "</td>"
+    + '<td class="num">' + stats.length + "</td>"
+    + '<td class="num"><b>' + pct(sumHere, sumTot) + "%</b></td></tr></tbody></table></div>";
+
+  h += "<h2>Anwesenheit pro Spieler</h2>"
+    + '<div class="tblwrap"><table class="grid"><thead><tr><th>#</th><th>Nachname</th><th>Vorname</th>'
+    + '<th class="num">A</th><th class="num">V</th><th class="num">E</th><th class="num">F</th>'
+    + '<th class="num">Termine</th><th class="num">Quote</th></tr></thead><tbody>'
+    + stats.map(function(x, i){
+        return "<tr><td>" + (i+1) + "</td><td>" + esc(x.p.last) + "</td><td>" + esc(x.p.first) + '</td><td class="num">'
+          + x.present + '</td><td class="num">' + x.late + '</td><td class="num">' + x.excused + '</td><td class="num">'
+          + x.absent + '</td><td class="num">' + x.total + '</td><td class="num"><b>' + x.quote + "%</b></td></tr>";
+      }).join("") + "</tbody></table></div>";
+
+  h += "<h2>Termine</h2>"
+    + '<div class="tblwrap"><table class="grid"><thead><tr><th>Datum</th><th>Tag</th><th>Zeit</th><th>Art</th><th>Bezeichnung</th><th>Trainer</th><th class="num">Anwesend</th><th class="num">Quote</th></tr></thead><tbody>'
+    + recs.map(function(r){
+        var here = 0, tot = 0;
+        for (var k in r.entries) { tot++; if (r.entries[k] === "present" || r.entries[k] === "late") here++; }
+        var cn = (r.coachIds || []).map(function(id){ var c = byId(DB.coaches, id); return c ? fullName(c) : null; }).filter(Boolean).join(", ");
+        return "<tr><td>" + fmtShort(r.date) + "</td><td>" + DOW_S[dowOf(r.date)] + "</td><td>" + esc(timeRange(r) || "–")
+          + "</td><td>" + typeLabel(r.type) + "</td><td>" + esc(r.label || "") + "</td><td>" + (esc(cn) || "–")
+          + '</td><td class="num">' + here + " / " + tot + '</td><td class="num">' + pct(here, tot) + "%</td></tr>";
+      }).join("") + "</tbody></table></div>";
+
+  if (recs.length && recs.length <= 40) {
+    h += "<h2>Anwesenheitsmatrix</h2>"
+      + '<div class="tblwrap"><table class="grid"><thead><tr><th>Spieler</th>'
+      + recs.map(function(r){ return "<th>" + fmtShort(r.date).slice(0, 9) + "<br>" + (r.type === "match" ? "W" : "T") + "</th>"; }).join("")
+      + '<th class="num">Quote</th></tr></thead><tbody>'
+      + stats.map(function(x){
+          return "<tr><td>" + esc(x.p.last) + ", " + esc(x.p.first) + "</td>"
+            + recs.map(function(r){
+                var st = r.entries[x.p.id];
+                return '<td class="mx ' + (st ? "mx-" + st : "") + '">' + (st ? SK[st].ab : "·") + "</td>";
+              }).join("") + '<td class="num"><b>' + x.quote + "%</b></td></tr>";
+        }).join("") + "</tbody></table></div>";
+  } else if (recs.length > 40) {
+    h += '<p class="small muted">Die Anwesenheitsmatrix wird ab 40 Terminen nicht mehr gedruckt – für die vollständigen Einzeldaten den CSV-Export verwenden.</p>';
+  }
+
+  h += '<p class="small muted" style="margin-top:14px">A = anwesend &middot; V = verspätet &middot; E = entschuldigt &middot; F = fehlt &middot; T = Training &middot; W = Wettkampf<br>'
+    + "Quote = (anwesend + verspätet) / erfasste Termine des Spielers.</p></div>";
+  return h;
+}
+
+/* ===================== Rendering ===================== */
+function render(){
+  if (!UNLOCKED || !DB) { el("root").innerHTML = viewLock("app"); return; }
+  var team = DB.settings.team || TITLE;
+  var sub = DB.settings.season ? "Saison " + DB.settings.season : "Anwesenheit";
+  var back = (UI.view === "record" || UI.view === "adhoc" || UI.view === "report");
+  var body =
+      UI.view === "record" ? viewRecord()
+    : UI.view === "adhoc"  ? viewAdhoc()
+    : UI.view === "report" ? viewReport()
+    : UI.view === "stats"  ? viewStats()
+    : UI.view === "admin"  ? (ADMIN_OK ? viewAdmin() : viewLock("admin"))
+    : viewEvents();
+
+  var nav = '<nav class="nav"><div class="nav-in">'
+    + navBtn("events", "Termine", ICON.cal) + navBtn("stats", "Auswertung", ICON.chart) + navBtn("admin", "Admin", ICON.cog)
+    + "</div></nav>";
+
+  el("root").innerHTML =
+      '<header class="topbar"><div class="topbar-in">'
+    + (back ? '<button class="back" data-act="back">' + ICON.arrow + "Zurück</button>" : "")
+    + '<span class="brand"><b>' + esc(team) + "</b><span>" + esc(sub) + "</span></span>"
+    + "</div></header>"
+    + '<main class="app">' + body + "</main>" + nav;
+  window.scrollTo(0, UI.scroll || 0);
+  UI.scroll = 0;
+  try { sessionStorage.setItem("tp.ui", JSON.stringify({view:UI.view, occ:UI.occ, statType:UI.statType, statRange:UI.statRange, statSort:UI.statSort, adminTab:UI.adminTab})); } catch(e){}
+}
+function navBtn(v, label, icon){
+  return '<button data-act="go" data-view="' + v + '"' + (UI.view === v || (v === "events" && (UI.view === "record" || UI.view === "adhoc")) || (v === "stats" && UI.view === "report") ? ' aria-current="page"' : "") + ">" + icon + "<span>" + label + "</span></button>";
+}
+function go(view){ UI.view = view; UI.confirm = null; UI.edit = null; PINBUF = ""; render(); }
+function val(id){ var e = el(id); return e ? e.value.trim() : ""; }
+
+/* ===================== Aktionen ===================== */
+document.addEventListener("click", function(ev){
+  var t = ev.target.closest("[data-act]");
+  if (!t) return;
+  var a = t.getAttribute("data-act");
+  var handler = ACT[a];
+  if (!handler) return;
+  ev.preventDefault();
+  handler(t);
+});
+document.addEventListener("input", function(ev){
+  var t = ev.target;
+  if (t.getAttribute && t.getAttribute("data-act") === "note" && UI.state) {
+    UI.state.note = t.value;
+    saveDraft(UI.occ, UI.state);
+  }
+});
+
+function updateSheet(){
+  var st = UI.state;
+  document.querySelectorAll(".plist li").forEach(function(li){
+    var pid = li.getAttribute("data-player");
+    li.querySelectorAll(".seg button").forEach(function(b){
+      b.setAttribute("aria-pressed", String(b.getAttribute("data-status") === st.entries[pid]));
+    });
+  });
+  var tot = document.querySelectorAll(".plist li").length;
+  var box = el("tally"); if (box) box.innerHTML = tallyHtml(st, tot);
+  saveDraft(UI.occ, st);
+}
+
+var ACT = {
+  go: function(t){
+    var v = t.getAttribute("data-view");
+    if (t.getAttribute("data-tab")) UI.adminTab = t.getAttribute("data-tab");
+    go(v);
+  },
+  back: function(){ go(UI.view === "report" ? "stats" : "events"); },
+  report: function(){ go("report"); },
+  print: function(){ try { window.print(); } catch(e){ toast("Der Browser hat das Drucken blockiert – bitte über das Browsermenü drucken."); } },
+  pin: function(t){
+    var kind = UNLOCKED ? "admin" : "app";
+    if (LOADING || PINBUF.length >= 12) return;
+    PINBUF += t.getAttribute("data-d");
+    render();
+    if (PINBUF.length >= pinLength(kind)) setTimeout(function(){ submitPin(kind); }, 90);
+  },
+  pinok: function(){ submitPin(UNLOCKED ? "admin" : "app"); },
+  pindel: function(){ PINBUF = PINBUF.slice(0, -1); render(); },
+  pinclear: function(){ PINBUF = ""; render(); },
+  lock: function(){
+    try { localStorage.removeItem("tp.pin"); sessionStorage.removeItem("tp.admin"); } catch(e){}
+    PINBUF = ""; PIN = ""; DB = null; UNLOCKED = false; ADMIN_OK = false; UI.view = "events"; render();
+  },
+  open: function(t){ UI.occ = t.getAttribute("data-occ"); UI.confirm = null; go("record"); },
+  adhoc: function(){ go("adhoc"); },
+  adhocgo: function(){
+    var d = val("a-date"); if (!d) { toast("Bitte ein Datum wählen."); return; }
+    UI.adhoc = {id: uid("x"), date: d, time: val("a-time"), timeEnd: val("a-end"), type: val("a-type"), label: val("a-label")};
+    UI.occ = UI.adhoc.id; go("record");
+  },
+  coach: function(t){
+    var id = t.getAttribute("data-id"), st = UI.state, i = st.coachIds.indexOf(id);
+    if (i >= 0) st.coachIds.splice(i, 1); else st.coachIds.push(id);
+    saveDraft(UI.occ, st);
+    UI.scroll = window.scrollY;
+    render();
+  },
+  mark: function(t){
+    var pid = t.getAttribute("data-player"), s = t.getAttribute("data-status"), st = UI.state;
+    if (st.entries[pid] === s) delete st.entries[pid]; else st.entries[pid] = s;
+    updateSheet();
+  },
+  all: function(t){
+    var s = t.getAttribute("data-status"), st = UI.state;
+    st.entries = {};
+    if (s) document.querySelectorAll(".plist li").forEach(function(li){ st.entries[li.getAttribute("data-player")] = s; });
+    updateSheet();
+  },
+  save: function(){
+    var occ = findOccurrence(UI.occ), st = UI.state;
+    if (!occ) return;
+    if (activeCoaches().length && !st.coachIds.length) { toast("Bitte mindestens einen anwesenden Trainer wählen."); return; }
+    var n = 0; for (var k in st.entries) n++;
+    if (!n) { toast("Bitte mindestens einen Spieler erfassen."); return; }
+    var names = st.coachIds.map(function(id){ var c = byId(DB.coaches, id); return c ? fullName(c) : null; }).filter(Boolean).join(", ");
+    var stamp = fmtShort(todayISO()) + " " + pad(new Date().getHours()) + ":" + pad(new Date().getMinutes());
+    var id = UI.occ;
+    commit(function(db){
+      var rec = byId(db.records, id);
+      if (!rec) { rec = {id: id, createdAt: stamp, createdBy: names}; db.records.push(rec); }
+      rec.date = occ.date; rec.time = occ.time || ""; rec.timeEnd = occ.timeEnd || "";
+      rec.type = occ.type; rec.label = occ.label || "";
+      rec.coachIds = st.coachIds.slice();
+      rec.entries = Object.assign({}, st.entries);
+      rec.note = st.note || "";
+      rec.updatedAt = stamp; rec.updatedBy = names;
+    }, "Anwesenheit gespeichert.", {view: "events", occ: null}).then(function(ok){
+      if (ok) { clearDraft(id); UI.view = "events"; UI.adhoc = null; render(); }
+    });
+  },
+  dropdraft: function(){ clearDraft(UI.occ); go("events"); toast("Entwurf verworfen."); },
+  delrec: function(t){
+    if (UI.confirm !== "rec") { UI.confirm = "rec"; render(); toast("Nochmals tippen, um die Erfassung zu löschen."); return; }
+    var id = UI.occ;
+    commit(function(db){ db.records = db.records.filter(function(r){ return r.id !== id; }); },
+      "Erfassung gelöscht.", {view: "events", occ: null})
+      .then(function(ok){ if (ok) { clearDraft(id); UI.confirm = null; UI.view = "events"; render(); } });
+  },
+  stype: function(t){ UI.statType = t.getAttribute("data-v"); render(); },
+  srange: function(t){ UI.statRange = t.getAttribute("data-v"); render(); },
+  ssort: function(){ UI.statSort = UI.statSort === "quote" ? "name" : "quote"; render(); },
+  export: function(){ exportCsv(); },
+  atab: function(t){ UI.adminTab = t.getAttribute("data-v"); UI.edit = null; UI.confirm = null; render(); },
+  ask: function(t){ UI.confirm = t.getAttribute("data-id") || null; render(); },
+  canceledit: function(){ UI.edit = null; render(); },
+  editperson: function(t){ UI.edit = {kind: t.getAttribute("data-kind"), id: t.getAttribute("data-id")}; render(); },
+  addperson: function(t){
+    var kind = t.getAttribute("data-kind"), first = val("n-first"), last = val("n-last"), role = val("n-role");
+    if (!first && !last) { toast("Bitte Vor- und Nachname eingeben."); return; }
+    commit(function(db){
+      var p = {id: uid("p"), first: first, last: last, active: true};
+      if (kind === "coaches") { p.role = role; db.coaches.push(p); } else db.players.push(p);
+    }, (last || first) + " hinzugefügt.");
+  },
+  saveperson: function(t){
+    var kind = t.getAttribute("data-kind"), id = t.getAttribute("data-id");
+    var first = val("e-first"), last = val("e-last"), role = val("e-role");
+    commit(function(db){
+      var p = byId(kind === "coaches" ? db.coaches : db.players, id);
+      if (p) { p.first = first; p.last = last; if (kind === "coaches") p.role = role; }
+    }, "Gespeichert.").then(function(ok){ if (ok) UI.edit = null; });
+  },
+  toggleperson: function(t){
+    var kind = t.getAttribute("data-kind"), id = t.getAttribute("data-id");
+    commit(function(db){
+      var p = byId(kind === "coaches" ? db.coaches : db.players, id);
+      if (p) p.active = (p.active === false);
+    }, "Gespeichert.");
+  },
+  delperson: function(t){
+    var kind = t.getAttribute("data-kind"), id = t.getAttribute("data-id");
+    commit(function(db){
+      if (kind === "coaches") {
+        db.coaches = db.coaches.filter(function(c){ return c.id !== id; });
+        db.records.forEach(function(r){ r.coachIds = (r.coachIds || []).filter(function(c){ return c !== id; }); });
+      } else {
+        db.players = db.players.filter(function(p){ return p.id !== id; });
+        db.records.forEach(function(r){ if (r.entries) delete r.entries[id]; });
+      }
+    }, "Gelöscht.").then(function(ok){ if (ok) UI.confirm = null; });
+  },
+  bulk: function(t){
+    var kind = t.getAttribute("data-kind"), raw = el("bulk") ? el("bulk").value : "";
+    var rows = raw.split("\n").map(function(s){ return s.trim(); }).filter(Boolean);
+    if (!rows.length) { toast("Bitte zuerst Namen eintragen."); return; }
+    commit(function(db){
+      rows.forEach(function(line){
+        var first = "", last = "";
+        if (line.indexOf(",") >= 0) { var a = line.split(","); last = a[0].trim(); first = (a[1] || "").trim(); }
+        else { var w = line.split(/\s+/); last = w.pop(); first = w.join(" "); }
+        var p = {id: uid("p"), first: first, last: last, active: true};
+        if (kind === "coaches") { p.role = ""; db.coaches.push(p); } else db.players.push(p);
+      });
+    }, rows.length + " Einträge hinzugefügt.");
+  },
+  addrule: function(){
+    var time = val("r-time");
+    commit(function(db){
+      db.rules.push({id: uid("r"), type: val("r-type"), weekday: Number(val("r-day")), time: time, timeEnd: val("r-end"),
+        label: val("r-label"), from: val("r-from"), to: val("r-to"), active: true});
+    }, "Serie hinzugefügt.");
+  },
+  togglerule: function(t){
+    var id = t.getAttribute("data-id");
+    commit(function(db){ var r = byId(db.rules, id); if (r) r.active = (r.active === false); }, "Gespeichert.");
+  },
+  delrule: function(t){
+    var id = t.getAttribute("data-id");
+    commit(function(db){ db.rules = db.rules.filter(function(r){ return r.id !== id; }); }, "Serie gelöscht.")
+      .then(function(ok){ if (ok) UI.confirm = null; });
+  },
+  addsingle: function(){
+    var d = val("s-date"); if (!d) { toast("Bitte ein Datum wählen."); return; }
+    commit(function(db){
+      db.singles.push({id: uid("s"), type: val("s-type"), date: d, time: val("s-time"), timeEnd: val("s-end"), label: val("s-label")});
+    }, "Einzeltermin hinzugefügt.");
+  },
+  delsingle: function(t){
+    var id = t.getAttribute("data-id");
+    commit(function(db){ db.singles = db.singles.filter(function(s){ return s.id !== id; }); }, "Termin gelöscht.")
+      .then(function(ok){ if (ok) UI.confirm = null; });
+  },
+  savesettings: function(){
+    var team = val("t-team"), season = val("t-season"), s = val("t-start"), e = val("t-end");
+    var pin = val("t-pin").replace(/\D/g, ""), apin = val("t-apin").replace(/\D/g, "");
+    commit(function(db){ db.settings = {team: team, season: season, seasonStart: s, seasonEnd: e, pin: pin, adminPin: apin}; },
+      "Gespeichert.").then(function(ok){
+        if (ok) {
+          PIN = pin;   // ab jetzt gilt der neue PIN auch fuer diese Sitzung
+          try {
+            if (pin) localStorage.setItem("tp.pin", pin); else localStorage.removeItem("tp.pin");
+            if (apin) sessionStorage.setItem("tp.admin", apin);
+          } catch(e2){}
+        }
+      });
+  },
+  backup: function(){
+    if (download("trainingspraesenz-sicherung-" + todayISO() + ".json", JSON.stringify(DB, null, 2), "application/json"))
+      toast("Sicherung gespeichert.");
+  },
+  sheet: function(){ if (SHEETURL) window.open(SHEETURL, "_blank", "noopener"); },
+  retry: function(){ FAIL = null; boot(PIN || storedPin()); }
+};
+
+/* ===================== Start ===================== */
+document.addEventListener("visibilitychange", function(){ if (!document.hidden) refresh(); });
+window.addEventListener("online", function(){ if (FAIL) boot(PIN || storedPin()); });
+
+render();
+if (storedPin()) boot(storedPin());
+
+})();
+</script>
+</body>
+</html>

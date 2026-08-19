@@ -1,0 +1,14 @@
+{
+  "name": "Trainingspräsenz",
+  "short_name": "Präsenz",
+  "description": "Anwesenheitserfassung für Training und Wettkampf",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#F0F3F1",
+  "theme_color": "#1B6B48",
+  "icons": [
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ]
+}
