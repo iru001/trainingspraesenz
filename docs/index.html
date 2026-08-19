@@ -192,6 +192,7 @@ input::placeholder,textarea::placeholder{color:var(--ink-3)}
   border-radius:999px;padding:8px 13px;font-size:14px;font-weight:600;min-height:40px;
 }
 .coach[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+.coach[aria-pressed="true"] .muted{color:inherit;opacity:.72}
 .coach svg{width:15px;height:15px;stroke:currentColor;fill:none;stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round}
 
 .plist{list-style:none;margin:0;padding:0;display:flex;flex-direction:column}
@@ -431,12 +432,23 @@ function configured(){ return !!(CFG.apiUrl && /^https?:\/\//.test(CFG.apiUrl) &
 
 async function apiCall(payload){
   if (!configured()) throw {error:"noconfig"};
-  var res = await fetch(CFG.apiUrl, {
-    method: "POST",
-    // text/plain vermeidet die Vorabanfrage, die Google-Skripte nicht beantworten
-    headers: {"Content-Type": "text/plain;charset=utf-8"},
-    body: JSON.stringify(payload)
-  });
+  // Zeitlimit, damit eine haengende Verbindung nicht ewig "Bitte warten" zeigt
+  var stop = null, signal;
+  try { var ac = new AbortController(); signal = ac.signal; stop = setTimeout(function(){ ac.abort(); }, 30000); } catch(e){}
+  var res;
+  try {
+    res = await fetch(CFG.apiUrl, {
+      method: "POST",
+      // text/plain vermeidet die Vorabanfrage, die Google-Skripte nicht beantworten
+      headers: {"Content-Type": "text/plain;charset=utf-8"},
+      body: JSON.stringify(payload),
+      signal: signal
+    });
+  } catch(err) {
+    if (stop) clearTimeout(stop);
+    throw (err && err.name === "AbortError") ? {error:"timeout"} : {error:"network"};
+  }
+  if (stop) clearTimeout(stop);
   if (!res.ok) throw {error:"http", status: res.status};
   var data = await res.json();
   if (!data || typeof data !== "object") throw {error:"bad_response"};
@@ -450,6 +462,7 @@ function failText(err){
   if (e === "noconfig") return "Die App ist noch nicht mit der Google-Tabelle verbunden – in docs/config.js fehlt die Adresse des Skripts (siehe SETUP.md).";
   if (e === "http") return "Der Server hat mit Fehler " + err.status + " geantwortet. Ist das Skript als Web-App für «alle» freigegeben?";
   if (e === "busy") return "Gerade speichert jemand anderes. Bitte in ein paar Sekunden nochmals versuchen.";
+  if (e === "timeout") return "Der Server antwortet nicht. Das Mobilfunknetz ist vielleicht zu langsam – bitte nochmals versuchen.";
   if (e === "nopin") return "Im Google-Skript ist noch kein PIN gesetzt. Trage oben in der Datei Code.gs bei ERSTER_PIN einen PIN ein (siehe SETUP.md).";
   return "Keine Verbindung zum Server. Internetverbindung prüfen und nochmals versuchen.";
 }
