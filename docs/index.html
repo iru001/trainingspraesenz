@@ -726,7 +726,7 @@ function viewRecord(){
       + '<button class="btn btn-sm" data-act="all" data-status="present">Alle anwesend</button>'
       + '<button class="btn btn-sm" data-act="all" data-status="">Zurücksetzen</button></div>';
     h += '<div class="card"><ul class="plist">' + players.map(function(p){
-      return '<li data-player="' + p.id + '"><span class="pname"><b>' + esc(p.last) + "</b>, " + esc(p.first)
+      return '<li data-player="' + p.id + '"><span class="pname"><b>' + esc(p.first) + "</b> " + esc(p.last)
         + (p.active === false ? ' <small>nicht mehr im Kader</small>' : "") + "</span>"
         + '<span class="seg">' + STATUS.map(function(s){
             var on = state.entries[p.id] === s.k;
@@ -840,7 +840,7 @@ function viewStats(){
         return w > 0 ? '<i class="b-' + st.k + '" style="width:' + w + '%"></i>' : "";
       }).join("");
       return '<div class="prow"><div class="prow-main">'
-        + '<span class="prow-name">' + esc(s.p.last) + ", " + esc(s.p.first) + (s.p.active === false ? ' <span class="muted small">(inaktiv)</span>' : "") + "</span>"
+        + '<span class="prow-name">' + esc(s.p.first) + " " + esc(s.p.last) + (s.p.active === false ? ' <span class="muted small">(inaktiv)</span>' : "") + "</span>"
         + '<span class="bar">' + seg + "</span>"
         + '<span class="prow-sub">' + s.here + " von " + s.total + " &middot; A " + s.present + " &middot; V " + s.late + " &middot; E " + s.excused + " &middot; F " + s.absent + "</span>"
         + '</div><span class="prow-num">' + s.quote + "%</span></div>";
@@ -891,9 +891,9 @@ function exportCsv(){
   lines.push([q("Saison"), q(DB.settings.season || "")].join(sep));
   lines.push([q("Export"), q(fmtDate(todayISO()))].join(sep));
   lines.push("");
-  lines.push(["Nachname","Vorname","Quote %","Anwesend","Verspätet","Entschuldigt","Fehlt","Erfasste Termine"].map(q).join(sep));
+  lines.push(["Vorname","Nachname","Quote %","Anwesend","Verspätet","Entschuldigt","Fehlt","Erfasste Termine"].map(q).join(sep));
   stats.forEach(function(s){
-    lines.push([s.p.last, s.p.first, s.quote, s.present, s.late, s.excused, s.absent, s.total].map(q).join(sep));
+    lines.push([s.p.first, s.p.last, s.quote, s.present, s.late, s.excused, s.absent, s.total].map(q).join(sep));
   });
   lines.push("");
   lines.push(["Datum","Wochentag","Uhrzeit","Art","Bezeichnung","Trainer","Anwesend","Erfasst","Notiz"].map(q).join(sep));
@@ -905,9 +905,9 @@ function exportCsv(){
   });
   lines.push("");
   lines.push(["Matrix: Spieler x Termin (A=Anwesend, V=Verspätet, E=Entschuldigt, F=Fehlt)"].map(q).join(sep));
-  lines.push(["Nachname","Vorname"].concat(recs.map(function(r){ return fmtShort(r.date) + " " + (r.type === "match" ? "W" : "T"); })).map(q).join(sep));
+  lines.push(["Vorname","Nachname"].concat(recs.map(function(r){ return fmtShort(r.date) + " " + (r.type === "match" ? "W" : "T"); })).map(q).join(sep));
   stats.forEach(function(s){
-    lines.push([s.p.last, s.p.first].concat(recs.map(function(r){
+    lines.push([s.p.first, s.p.last].concat(recs.map(function(r){
       var st = r.entries[s.p.id]; return st ? SK[st].ab : "";
     })).map(q).join(sep));
   });
@@ -951,7 +951,7 @@ function adminPeople(kind){
           + '<button class="btn btn-sm btn-primary" data-act="saveperson" data-kind="' + kind + '" data-id="' + p.id + '">Speichern</button>'
           + '<button class="btn btn-sm btn-ghost" data-act="canceledit">Abbrechen</button></div></div>';
       }
-      return '<div class="item' + (p.active === false ? " off" : "") + '"><span class="grow"><b>' + esc(p.last) + "</b>, " + esc(p.first)
+      return '<div class="item' + (p.active === false ? " off" : "") + '"><span class="grow"><b>' + esc(p.first) + "</b> " + esc(p.last)
         + (p.role ? ' <span class="muted small">' + esc(p.role) + "</span>" : "")
         + (p.active === false ? ' <span class="pill pill-done">inaktiv</span>' : "") + "</span>"
         + '<button class="iconbtn" data-act="editperson" data-kind="' + kind + '" data-id="' + p.id + '" title="Bearbeiten" aria-label="Bearbeiten">' + ICON.pen + "</button>"
@@ -1152,11 +1152,11 @@ function viewReport(){
     + '<td class="num"><b>' + pct(sumHere, sumTot) + "%</b></td></tr></tbody></table></div>";
 
   h += "<h2>Anwesenheit pro Spieler</h2>"
-    + '<div class="tblwrap"><table class="grid"><thead><tr><th>#</th><th>Nachname</th><th>Vorname</th>'
+    + '<div class="tblwrap"><table class="grid"><thead><tr><th>#</th><th>Vorname</th><th>Nachname</th>'
     + '<th class="num">A</th><th class="num">V</th><th class="num">E</th><th class="num">F</th>'
     + '<th class="num">Termine</th><th class="num">Quote</th></tr></thead><tbody>'
     + stats.map(function(x, i){
-        return "<tr><td>" + (i+1) + "</td><td>" + esc(x.p.last) + "</td><td>" + esc(x.p.first) + '</td><td class="num">'
+        return "<tr><td>" + (i+1) + "</td><td>" + esc(x.p.first) + "</td><td>" + esc(x.p.last) + '</td><td class="num">'
           + x.present + '</td><td class="num">' + x.late + '</td><td class="num">' + x.excused + '</td><td class="num">'
           + x.absent + '</td><td class="num">' + x.total + '</td><td class="num"><b>' + x.quote + "%</b></td></tr>";
       }).join("") + "</tbody></table></div>";
@@ -1178,7 +1178,7 @@ function viewReport(){
       + recs.map(function(r){ return "<th>" + fmtShort(r.date).slice(0, 9) + "<br>" + (r.type === "match" ? "W" : "T") + "</th>"; }).join("")
       + '<th class="num">Quote</th></tr></thead><tbody>'
       + stats.map(function(x){
-          return "<tr><td>" + esc(x.p.last) + ", " + esc(x.p.first) + "</td>"
+          return "<tr><td>" + esc(x.p.first) + " " + esc(x.p.last) + "</td>"
             + recs.map(function(r){
                 var st = r.entries[x.p.id];
                 return '<td class="mx ' + (st ? "mx-" + st : "") + '">' + (st ? SK[st].ab : "·") + "</td>";
