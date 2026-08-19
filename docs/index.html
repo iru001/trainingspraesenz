@@ -1052,17 +1052,27 @@ function viewAdhoc(){
 /* ===================== PIN-Sperre ===================== */
 function storedPin(){ try { return localStorage.getItem("tp.pin") || ""; } catch(e){ return ""; } }
 function pinOf(kind){ return kind === "admin" ? ((DB && DB.settings.adminPin) || "") : PIN; }
-function pinLength(kind){ return kind === "admin" ? (pinOf("admin").length || 4) : 4; }
 function checkAdmin(){
   ADMIN_OK = !DB.settings.adminPin;
   try { if (!ADMIN_OK && sessionStorage.getItem("tp.admin") === DB.settings.adminPin) ADMIN_OK = true; } catch(e){}
+}
+function addDigit(d){
+  var kind = UNLOCKED ? "admin" : "app";
+  if (LOADING || !/^[0-9]$/.test(d) || PINBUF.length >= 16) return;
+  PINBUF += d;
+  render();
+  // Nur beim Admin-PIN ist die Laenge bekannt - dort darf automatisch geprueft
+  // werden. Der App-PIN wird immer erst mit "Weiter" abgeschickt.
+  if (kind === "admin" && PINBUF.length >= pinOf("admin").length) setTimeout(function(){ submitPin(kind); }, 90);
 }
 function shake(){
   var l = el("lock");
   if (l) { l.classList.add("bad"); setTimeout(function(){ l.classList.remove("bad"); }, 400); }
 }
 function viewLock(kind){
-  var len = pinLength(kind);
+  // Beim Admin-PIN ist die Laenge bekannt, beim App-PIN nicht: dort waechst die
+  // Anzeige mit der Eingabe und ein Feld bleibt immer frei.
+  var len = kind === "admin" ? (pinOf("admin").length || 4) : Math.max(PINBUF.length + 1, 4);
   var dots = "";
   for (var i = 0; i < len; i++) dots += '<i class="' + (i < PINBUF.length ? "on" : "") + '"></i>';
   var keys = "";
@@ -1071,13 +1081,13 @@ function viewLock(kind){
         + '<button data-act="pin" data-d="0">0</button>'
         + '<button class="wide" data-act="pindel">&#9003;</button>';
   var extra = kind === "app"
-    ? '<button class="btn btn-primary btn-block" data-act="pinok"' + (LOADING ? " disabled" : "") + ">"
+    ? '<button class="btn btn-primary btn-block" data-act="pinok"' + (LOADING || !PINBUF ? " disabled" : "") + ">"
       + (LOADING ? "Bitte warten …" : "Weiter") + "</button>"
     : "";
   return '<div class="lock" id="lock"><div class="lock-card">'
     + '<div class="lock-mark">' + (kind === "admin" ? "A" : "⚽") + "</div>"
     + '<div class="lock-title">' + (kind === "admin" ? "Admin-Bereich" : (DB ? esc(DB.settings.team || TITLE) : TITLE)) + "</div>"
-    + '<p class="lock-sub">' + (kind === "admin" ? "Admin-PIN eingeben" : (LOADING ? "Daten werden geladen …" : "PIN eingeben")) + "</p>"
+    + '<p class="lock-sub">' + (kind === "admin" ? "Admin-PIN eingeben" : (LOADING ? "Daten werden geladen …" : "PIN eingeben, dann «Weiter»")) + "</p>"
     + '<div class="dots">' + dots + "</div>"
     + '<div class="keys">' + keys + "</div>"
     + (extra ? '<div style="width:100%;max-width:262px">' + extra + "</div>" : "")
@@ -1244,13 +1254,7 @@ var ACT = {
   back: function(){ go(UI.view === "report" ? "stats" : "events"); },
   report: function(){ go("report"); },
   print: function(){ try { window.print(); } catch(e){ toast("Der Browser hat das Drucken blockiert – bitte über das Browsermenü drucken."); } },
-  pin: function(t){
-    var kind = UNLOCKED ? "admin" : "app";
-    if (LOADING || PINBUF.length >= 12) return;
-    PINBUF += t.getAttribute("data-d");
-    render();
-    if (PINBUF.length >= pinLength(kind)) setTimeout(function(){ submitPin(kind); }, 90);
-  },
+  pin: function(t){ addDigit(t.getAttribute("data-d")); },
   pinok: function(){ submitPin(UNLOCKED ? "admin" : "app"); },
   pindel: function(){ PINBUF = PINBUF.slice(0, -1); render(); },
   pinclear: function(){ PINBUF = ""; render(); },
@@ -1420,6 +1424,12 @@ var ACT = {
 };
 
 /* ===================== Start ===================== */
+document.addEventListener("keydown", function(ev){
+  if (!el("lock") || ev.metaKey || ev.ctrlKey || ev.altKey) return;
+  if (/^[0-9]$/.test(ev.key)) { ev.preventDefault(); addDigit(ev.key); }
+  else if (ev.key === "Backspace") { ev.preventDefault(); PINBUF = PINBUF.slice(0, -1); render(); }
+  else if (ev.key === "Enter") { ev.preventDefault(); if (PINBUF) submitPin(UNLOCKED ? "admin" : "app"); }
+});
 document.addEventListener("visibilitychange", function(){ if (!document.hidden) refresh(); });
 window.addEventListener("online", function(){ if (FAIL) boot(PIN || storedPin()); });
 
