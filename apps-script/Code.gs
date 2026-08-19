@@ -21,6 +21,17 @@ var DATA_SHEET = '_daten';        // technisches Blatt mit dem Datenbestand
 var CHUNK = 40000;                // max. Zeichen pro Zelle
 var LOCK_MS = 25000;
 
+// Obergrenzen gegen aufgeblaehte oder boesartige Datenmengen
+var MAX_BODY = 300000;            // Zeichen pro Anfrage
+var MAX_PLAYERS = 300;
+var MAX_COACHES = 60;
+var MAX_RECORDS = 3000;
+
+// Die PIN liegt NICHT im Tabellenblatt, sondern in den Skript-Eigenschaften.
+// So kann sie niemand auslesen, selbst wenn die Google-Tabelle geteilt wird.
+var PIN_KEY = 'APP_PIN';
+var APIN_KEY = 'ADMIN_PIN';
+
 /* ============================ Anfragen ============================ */
 
 function doGet(e) {
@@ -31,42 +42,99 @@ function doGet(e) {
 }
 
 function doPost(e) {
+  var raw = (e && e.postData && e.postData.contents) || '';
+  if (raw.length > MAX_BODY) return json({ ok: false, error: 'too_large' });
   var p = {};
-  try { p = JSON.parse(e.postData.contents); } catch (err) { p = e.parameter || {}; }
+  try { p = JSON.parse(raw); } catch (err) { p = (e && e.parameter) || {}; }
   return json(handle(p));
 }
 
 function handle(p) {
   var lock = LockService.getScriptLock();
   try { lock.waitLock(LOCK_MS); } catch (err) { return { ok: false, error: 'busy' }; }
+  var released = false;
   try {
     var state = readState();
-    if (!state.settings.pin) return { ok: false, error: 'nopin' };
-    if (String(p.pin || '') !== String(state.settings.pin || '')) {
-      penalize();
+    var pins = getPins(state);
+    if (!pins.pin) return { ok: false, error: 'nopin' };
+
+    if (!equalsConst(String(p.pin == null ? '' : p.pin), pins.pin)) {
+      var wait = penaltyMs();
+      // Schlaf NACH dem Freigeben der Sperre, damit ein Angreifer mit vielen
+      // Fehlversuchen nicht die echten Trainer blockiert.
+      lock.releaseLock(); released = true;
+      if (wait > 0) Utilities.sleep(wait);
       return { ok: false, error: 'pin' };
     }
     clearPenalty();
 
     if (p.action === 'save') {
       var incoming = p.state;
-      if (!incoming || !incoming.settings) return { ok: false, error: 'bad_state' };
-      var have = Number(state.rev || 0);
-      if (Number(p.rev) !== have) {
-        // Jemand anders war schneller – die aktuelle Fassung zurückgeben.
-        return { ok: false, error: 'conflict', state: state };
+      var bad = validateState(incoming);
+      if (bad) return { ok: false, error: bad };
+      if (Number(p.rev) !== Number(state.rev || 0)) {
+        // Jemand anders war schneller - die aktuelle Fassung zurueckgeben.
+        return { ok: false, error: 'conflict', state: withPins(state, pins) };
       }
-      incoming.rev = have + 1;
-      writeState(incoming);
+      incoming.rev = Number(state.rev || 0) + 1;
+      savePins(incoming, pins);            // neue PIN ggf. in die Eigenschaften uebernehmen
+      writeState(stripPins(incoming));     // im Blatt landet die PIN nie
       try { renderSheets(incoming); } catch (err) { /* Darstellung darf das Speichern nie verhindern */ }
       return { ok: true, rev: incoming.rev };
     }
-    return { ok: true, state: state, sheetUrl: book().getUrl() };
+    return { ok: true, state: withPins(state, pins), sheetUrl: book().getUrl() };
   } catch (err) {
     return { ok: false, error: 'server', message: String(err) };
   } finally {
-    lock.releaseLock();
+    if (!released) lock.releaseLock();
   }
+}
+
+/* ---- PIN sicher in den Skript-Eigenschaften halten, nicht im Blatt ---- */
+function getPins(state) {
+  var props = PropertiesService.getScriptProperties();
+  var pin = props.getProperty(PIN_KEY);
+  var admin = props.getProperty(APIN_KEY);
+  var s = (state && state.settings) || {};
+  // Einmalige Uebernahme aus alten Daten, die die PIN noch im Blatt hatten.
+  if (pin === null) { pin = String(s.pin || ''); props.setProperty(PIN_KEY, pin); }
+  if (admin === null) { admin = String(s.adminPin || ''); props.setProperty(APIN_KEY, admin); }
+  return { pin: pin, admin: admin };
+}
+function savePins(incoming, current) {
+  var props = PropertiesService.getScriptProperties();
+  var s = incoming.settings || {};
+  var np = (s.pin !== undefined && s.pin !== '') ? String(s.pin) : current.pin;
+  var na = (s.adminPin !== undefined) ? String(s.adminPin) : current.admin;
+  if (np !== current.pin) props.setProperty(PIN_KEY, np);
+  if (na !== current.admin) props.setProperty(APIN_KEY, na);
+}
+function stripPins(state) {
+  var c = JSON.parse(JSON.stringify(state));
+  if (c.settings) { c.settings.pin = ''; c.settings.adminPin = ''; }
+  return c;
+}
+function withPins(state, pins) {
+  if (state.settings) { state.settings.pin = pins.pin; state.settings.adminPin = pins.admin; }
+  return state;
+}
+
+/* ---- Eingehende Daten grob pruefen ---- */
+function validateState(s) {
+  if (!s || typeof s !== 'object' || !s.settings || typeof s.settings !== 'object') return 'bad_state';
+  var keys = ['coaches', 'players', 'rules', 'singles', 'records'];
+  for (var i = 0; i < keys.length; i++) if (!Array.isArray(s[keys[i]])) return 'bad_state';
+  if (s.players.length > MAX_PLAYERS || s.coaches.length > MAX_COACHES || s.records.length > MAX_RECORDS) return 'too_large';
+  return null;
+}
+
+/* ---- Zeitkonstanter Vergleich, damit die Antwortzeit die PIN nicht verraet ---- */
+function equalsConst(a, b) {
+  a = String(a); b = String(b);
+  var n = Math.max(a.length, b.length);
+  var diff = a.length ^ b.length;
+  for (var i = 0; i < n; i++) diff |= ((a.charCodeAt(i) || 0) ^ (b.charCodeAt(i) || 0));
+  return diff === 0;
 }
 
 /**
@@ -78,9 +146,11 @@ function handle(p) {
 var FAIL_KEY = 'pinFails';
 var FAIL_TIME = 'pinFailsSince';
 var FAIL_WINDOW_MS = 60 * 60 * 1000;
-var FAIL_MAX_SLEEP = 8000;
+var FAIL_MAX_SLEEP = 20000;
 
-function penalize() {
+// Liefert die Wartezeit fuer diesen Fehlversuch und zaehlt den Zaehler hoch.
+// Der Schlaf selbst passiert im Aufrufer - ausserhalb der Sperre.
+function penaltyMs() {
   var props = PropertiesService.getScriptProperties();
   var since = Number(props.getProperty(FAIL_TIME) || 0);
   var now = new Date().getTime();
@@ -88,7 +158,8 @@ function penalize() {
   n++;
   props.setProperty(FAIL_KEY, String(n));
   props.setProperty(FAIL_TIME, String(now));
-  Utilities.sleep(Math.min(FAIL_MAX_SLEEP, 200 * n));
+  // Erster Fehlversuch frei, danach rasch steigend bis zum Deckel.
+  return Math.min(FAIL_MAX_SLEEP, Math.max(0, (n - 1) * 1500));
 }
 
 function clearPenalty() {
@@ -153,12 +224,20 @@ function sheetNamed(name) {
   return sh;
 }
 
+// Werte, die mit = + - @ (oder Steuerzeichen) beginnen, koennte Google Sheets
+// als Formel ausfuehren. Als Text erzwingen, damit ein Name wie "=IMPORTXML(..)"
+// harmlos bleibt.
+function cell(v) {
+  if (typeof v === 'string' && /^[=+\-@\t\r]/.test(v)) return "'" + v;
+  return v;
+}
 function put(sh, rows, headerRows) {
   if (!rows.length) return;
   var width = 0;
   rows.forEach(function (r) { width = Math.max(width, r.length); });
   rows.forEach(function (r) { while (r.length < width) r.push(''); });
-  sh.getRange(1, 1, rows.length, width).setValues(rows);
+  var safe = rows.map(function (r) { return r.map(cell); });
+  sh.getRange(1, 1, rows.length, width).setValues(safe);
   var h = headerRows || 1;
   sh.getRange(1, 1, h, width).setFontWeight('bold');
   sh.setFrozenRows(h);

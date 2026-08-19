@@ -463,6 +463,8 @@ function failText(err){
   if (e === "http") return "Der Server hat mit Fehler " + err.status + " geantwortet. Ist das Skript als Web-App für «alle» freigegeben?";
   if (e === "busy") return "Gerade speichert jemand anderes. Bitte in ein paar Sekunden nochmals versuchen.";
   if (e === "timeout") return "Der Server antwortet nicht. Das Mobilfunknetz ist vielleicht zu langsam – bitte nochmals versuchen.";
+  if (e === "too_large") return "Die Datenmenge ist zu gross. Bitte Rücksprache halten.";
+  if (e === "bad_state") return "Die Daten konnten nicht gespeichert werden (unerwartetes Format). Bitte die Seite neu laden.";
   if (e === "nopin") return "Im Google-Skript ist noch kein PIN gesetzt. Trage oben in der Datei Code.gs bei ERSTER_PIN einen PIN ein (siehe SETUP.md).";
   return "Keine Verbindung zum Server. Internetverbindung prüfen und nochmals versuchen.";
 }
@@ -885,7 +887,11 @@ function kpi(v, l){ return '<div class="card kpi"><b>' + v + "</b><span>" + l + 
 function exportCsv(){
   var recs = statRecords(), stats = playerStats(recs).sort(function(a,b){ return sortName(a.p, b.p); });
   var sep = ";", nl = "\r\n";
-  function q(v){ v = String(v == null ? "" : v); return /[";\r\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; }
+  function q(v){
+    v = String(v == null ? "" : v);
+    if (/^[=+\-@\t\r]/.test(v)) v = "'" + v;   // Formel-Ausfuehrung in Excel verhindern
+    return /[";\r\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v;
+  }
   var lines = [];
   lines.push([q("Team"), q(DB.settings.team || "")].join(sep));
   lines.push([q("Saison"), q(DB.settings.season || "")].join(sep));

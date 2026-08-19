@@ -58,9 +58,11 @@ die App legt die Blätter selbst an.
 
    **Diese Adresse kopieren.**
 
-> **Wenn du später etwas am Skript änderst:** Nicht nur speichern, sondern
-> **Bereitstellen → Bereitstellungen verwalten → Stift-Symbol → Version: Neu →
-> Bereitstellen**. Ohne neue Version läuft weiterhin die alte Fassung.
+> **Wenn du später etwas am Skript änderst** (z. B. eine neue Fassung von
+> `Code.gs` einspielst): Nicht nur speichern, sondern **Bereitstellen →
+> Bereitstellungen verwalten → Stift-Symbol → Version: Neu → Bereitstellen**.
+> Ohne neue Version läuft weiterhin die alte Fassung. Die Web-App-Adresse
+> bleibt dabei gleich.
 
 ## Schritt 4 – Adresse in die App eintragen
 
@@ -118,19 +120,25 @@ Alternativ direkt aus der App: **Auswertung → Für Excel exportieren (CSV)** o
 
 Die App ist über ihre Adresse öffentlich erreichbar. Den Zugang regelt allein
 der **App-PIN**: Ohne ihn gibt der Server keine Daten heraus, auch keine Namen.
+Der PIN wird serverseitig geprüft und liegt in den Skript-Eigenschaften, **nicht**
+in der Tabelle.
 
 Weil die Adresse öffentlich ist, gilt:
 
-- **Nimm mindestens 6 Ziffern als PIN.** Ein vierstelliger PIN hat nur 10 000
-  Möglichkeiten. Das Skript bremst zwar jeden Fehlversuch aus, aber sechs
-  Ziffern machen das Durchprobieren endgültig aussichtslos.
+- **Nimm mindestens 6 Ziffern als PIN.** Das Skript verzögert jeden Fehlversuch
+  zunehmend (bis 20 Sekunden), ohne echte Trainer auszubremsen – Durchprobieren
+  wird damit aussichtslos.
+- **Teile niemals die Google-Tabelle selbst** – auch nicht «nur zum Ansehen».
+  Gib immer nur den App-Link weiter. (Der PIN steht zwar nicht mehr in der
+  Tabelle, aber sie enthält alle Namen und Anwesenheiten.)
 - **Gib den PIN nur im Trainerteam weiter** – nicht im Elternchat.
 - **Verlässt jemand das Team**, ändere den PIN unter Admin → Team.
+- Auf einem **geteilten oder fremden Gerät** nach der Nutzung
+  **Admin → Team → «Auf diesem Gerät abmelden»** tippen – sonst bleibt der
+  Zugang dort bestehen.
 - Der **Admin-PIN** schützt nur den Admin-Bereich vor versehentlichen
-  Änderungen. Er ist kein zweiter Sicherheitsriegel.
-
-Gespeichert werden ausschliesslich Vor- und Nachname der Spieler sowie die
-Anwesenheiten. Keine Geburtsdaten, keine Adressen, keine Kontaktdaten.
+  Änderungen. Er ist kein zweiter Sicherheitsriegel: Jeder mit dem App-PIN
+  kann grundsätzlich erfassen und bearbeiten.
 
 ## Wenn etwas nicht funktioniert
 
