@@ -16,7 +16,8 @@ Person, die die App einrichtet.
 docs/index.html      die komplette App (HTML, CSS, JavaScript, ohne Bibliotheken)
 docs/config.js       Adresse des Google-Skripts – die einzige Datei, die du anpasst
 apps-script/Code.gs  Backend: speichert die Daten und schreibt die Tabellenblätter
-SETUP.md             Schritt-für-Schritt-Anleitung
+SETUP.md             Schritt-für-Schritt-Anleitung (Betrieb)
+DEVELOPMENT.md       Entwickler-Dokumentation & Anforderungen
 ```
 
 Die App spricht das Skript über eine einzige Adresse an; das Skript prüft bei
