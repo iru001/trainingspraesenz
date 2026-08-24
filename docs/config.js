@@ -22,6 +22,6 @@ window.TP_CONFIG = {
     { id: "fa2018", name: "FA 2018",
       apiUrl: "https://script.google.com/macros/s/AKfycbxsDrYQUklwHnFVTNe6wNSf1SF8VNALGgCWrEzZKarC10BLzoa3JvWkhuBaq3mS4EGo1g/exec" },
     { id: "db", name: "Db",
-      apiUrl: "HIER_DIE_ADRESSE_DES_ZWEITEN_GOOGLE_SKRIPTS_EINFUEGEN" }
+      apiUrl: "https://script.google.com/macros/s/AKfycbyqUdbidKXEtyA8kML6mAjhXQI-R-3JwA74i0JRgnn3NWv2usDXdWimyxZKvN2tGkLc7g/exec" }
   ]
 };
