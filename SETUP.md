@@ -73,9 +73,17 @@ die App legt die Blätter selbst an.
 
    ```js
    window.TP_CONFIG = {
-     apiUrl: "https://script.google.com/macros/s/AKfycb.../exec"
+     teams: [
+       { id: "team1", name: "Mein Team",
+         apiUrl: "https://script.google.com/macros/s/AKfycb.../exec" }
+     ]
    };
    ```
+
+   `id` frei wählen (kurz, keine Leerzeichen/Sonderzeichen) – einmal
+   vergeben, nicht mehr ändern. `name` erscheint auf dem Auswahlbildschirm,
+   sobald ein zweites Team dazukommt (bei nur einem Team wird die Auswahl
+   übersprungen).
 4. **Commit changes** klicken.
 
 ## Schritt 5 – GitHub Pages einschalten
@@ -102,6 +110,37 @@ die App legt die Blätter selbst an.
 3. Link und PIN an die Trainer geben. Auf dem Handy über das Teilen-Menü
    **«Zum Startbildschirm hinzufügen»** – danach verhält sich die App wie eine
    installierte App.
+
+---
+
+## Weiteres Team hinzufügen
+
+Jedes Team bekommt eine **eigene** Google-Tabelle mit eigenem Skript und
+eigenem PIN – komplett unabhängig vom ersten Team, auch von einer anderen
+Person verwaltbar. Die App-Adresse und der Programmcode bleiben dieselben.
+
+1. **Schritt 1–3 oben nochmals durchgehen**, für das neue Team: neue
+   Google-Tabelle anlegen, denselben `Code.gs`-Inhalt einfügen, eigenen PIN
+   bei `ERSTER_PIN`/`ERSTER_ADMIN_PIN` eintragen, als Web-App bereitstellen,
+   Adresse kopieren.
+2. In [`docs/config.js`](docs/config.js) einen **weiteren Eintrag** in die
+   `teams`-Liste einfügen (den bestehenden Eintrag nicht anfassen):
+
+   ```js
+   window.TP_CONFIG = {
+     teams: [
+       { id: "team1", name: "Mein Team", apiUrl: "https://script.google.com/.../exec" },
+       { id: "team2", name: "Zweites Team", apiUrl: "https://script.google.com/.../exec" }
+     ]
+   };
+   ```
+3. **Commit changes.** Nach 1–2 Minuten zeigt die App beim Öffnen eine
+   Team-Auswahl, bevor der PIN abgefragt wird.
+
+Trainer, die nur ein Team betreuen, merken vom zweiten Team nichts – ihr Gerät
+merkt sich weiterhin nur das eine Team, das sie einmal gewählt haben. Wer
+beide Teams betreut, kann über **Admin → Team → «Abmelden / Team wechseln»**
+zwischen ihnen wechseln.
 
 ---
 
@@ -144,7 +183,8 @@ Weil die Adresse öffentlich ist, gilt:
 
 | Meldung in der App | Ursache und Lösung |
 |---|---|
-| «noch nicht mit der Google-Tabelle verbunden» | Die Adresse in `docs/config.js` fehlt oder steht nicht in Anführungszeichen. |
+| «noch nicht mit der Google-Tabelle verbunden» | Die Adresse für dieses Team in `docs/config.js` fehlt oder steht nicht in Anführungszeichen. |
+| Team-Auswahl erscheint nicht mehr | Es ist nur noch ein Team in `docs/config.js` eingetragen – das ist Absicht, die Auswahl wird dann übersprungen. |
 | «Im Google-Skript ist noch kein PIN gesetzt» | Schritt 2.4: `ERSTER_PIN` im Skript ausfüllen und neue Version bereitstellen. |
 | «Server hat mit Fehler 401/403 geantwortet» | In Schritt 3 wurde beim Zugriff nicht **Jeder** gewählt. Bereitstellung bearbeiten und korrigieren. |
 | «Keine Verbindung zum Server» | Internetverbindung prüfen. Bleibt es dabei: Skript-Adresse im Browser öffnen – es muss die Meldung «Backend läuft» erscheinen. |

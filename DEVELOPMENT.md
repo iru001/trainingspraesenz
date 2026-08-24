@@ -59,21 +59,27 @@ Der Admin-PIN ist eine reine Bequemlichkeitssperre gegen versehentliche
 
 - **Frontend** (`docs/index.html`): eine Datei, die alles enthält – CSS im
   `<style id="app-style">`, die gesamte Logik im `<script id="app-code">`. Der
-  Zustand wird nach dem PIN-Login einmal vom Server geladen und im Speicher
-  gehalten (`DB`). Jede Änderung schickt den **kompletten** Zustand zurück.
-- **Konfiguration** (`docs/config.js`): setzt `window.TP_CONFIG.apiUrl` auf die
-  Web-App-Adresse des Skripts. Einzige betreiberspezifische Datei.
+  Zustand wird nach der Team- und PIN-Wahl einmal vom Server geladen und im
+  Speicher gehalten (`DB`). Jede Änderung schickt den **kompletten** Zustand
+  des aktuell gewählten Teams zurück.
+- **Konfiguration** (`docs/config.js`): setzt `window.TP_CONFIG.teams` – eine
+  Liste von Teams, jedes mit eigener `apiUrl`. Einzige betreiberspezifische
+  Datei. Siehe §3a.
 - **Backend** (`apps-script/Code.gs`): dünne Schicht über einer Google-Tabelle.
   Prüft den PIN, liest/schreibt den JSON-Zustand in ein ausgeblendetes Blatt
-  `_daten` und rendert daraus lesbare Blätter für den Excel-Export.
+  `_daten` und rendert daraus lesbare Blätter für den Excel-Export. **Kennt
+  keine Teams** – jede Bereitstellung von `Code.gs` bedient genau EIN Team
+  (eine Tabelle). Mehrere Teams entstehen durch mehrere unabhängige
+  Bereitstellungen desselben, unveränderten Skripts.
 - **Persistenz**: die „Datenbank" ist eine Google-Tabelle. Der maßgebliche
   Zustand liegt als **ein** JSON-String im Blatt `_daten`, über mehrere Zellen
   verteilt (max. `CHUNK` Zeichen pro Zelle). Die übrigen Blätter sind ein
   **Abbild** und werden bei jeder Speicherung überschrieben.
 
 **Bewusst NICHT vorhanden:** Benutzerkonten, Sessions/Tokens, echte Datenbank,
-Server-Framework, Realtime/WebSockets, Push, mehrsprachige UI, Mandantenfähigkeit
-(eine Instanz = ein Team = eine Tabelle).
+Server-Framework, Realtime/WebSockets, Push, mehrsprachige UI. Mandantenfähigkeit
+gibt es nur auf Frontend-Ebene (§3a) – eine Backend-Bereitstellung bedient
+weiterhin genau ein Team.
 
 ---
 
@@ -81,15 +87,69 @@ Server-Framework, Realtime/WebSockets, Push, mehrsprachige UI, Mandantenfähigke
 
 | Pfad | Zweck | Deploy |
 |---|---|---|
-| `docs/index.html` | Komplette App (UI, Logik, Styles) | GitHub Pages, automatisch |
-| `docs/config.js` | `apiUrl` des Google-Skripts | GitHub Pages, automatisch |
+| `docs/index.html` | Komplette App (UI, Logik, Styles) – **team-unabhängig** | GitHub Pages, automatisch |
+| `docs/config.js` | Liste der Teams, je mit eigener `apiUrl` | GitHub Pages, automatisch |
 | `docs/icon.svg` | App-Symbol (Startbildschirm) | GitHub Pages, automatisch |
 | `docs/manifest.webmanifest` | PWA-Manifest | GitHub Pages, automatisch |
 | `docs/.nojekyll` | verhindert Jekyll-Verarbeitung | – |
-| `apps-script/Code.gs` | Backend | **manuell** in Apps Script + Redeploy |
+| `apps-script/Code.gs` | Backend, **einmal pro Team bereitgestellt** | **manuell** in Apps Script + Redeploy, pro Team |
 | `SETUP.md` | Einrichtung für Betreiber | – |
 | `README.md` | Überblick | – |
 | `DEVELOPMENT.md` | dieses Dokument | – |
+
+---
+
+## 3a. Mehrere Teams
+
+Eine Bereitstellung der App (ein GitHub-Pages-Link) kann mehrere, komplett
+unabhängige Teams bedienen. "Unabhängig" heisst wörtlich: eigene
+Google-Tabelle, eigenes `Code.gs`-Deployment, eigener PIN, eigener Admin-PIN,
+eigene Trainer/Spieler/Termine – nichts wird zwischen Teams geteilt ausser der
+Programmoberfläche selbst. Das Backend weiss nichts von "mehreren Teams"; es
+bedient wie eh und je genau eine Tabelle. Die Trennung passiert ausschliesslich
+im Frontend.
+
+**`docs/config.js`:**
+```js
+window.TP_CONFIG = {
+  teams: [
+    { id: "fa2018", name: "FA 2018", apiUrl: "https://script.google.com/.../exec" },
+    { id: "db",     name: "Db",      apiUrl: "https://script.google.com/.../exec" }
+  ]
+};
+```
+`id` ist ein fester, kurzer Code (keine Sonderzeichen) – er ist Teil von
+`localStorage`-Schlüsseln und darf sich nach dem Ausrollen nicht mehr ändern,
+sonst "vergisst" jedes Gerät seinen gemerkten PIN für dieses Team. Ist nur ein
+Team konfiguriert, wird die Team-Auswahl automatisch übersprungen.
+
+**Ablauf im Frontend:** `TEAM` (gewähltes Team-Objekt) ist ein zusätzlicher
+globaler Zustand VOR `DB`. Ist `TEAM` noch `null`, zeigt `render()` den
+Team-Picker (`viewTeamPicker()`); erst danach greift die normale
+PIN-Sperre (`viewLock("app")`), diesmal gegen `TEAM.apiUrl` statt eine feste
+Adresse. `apiCall()`/`configured()` lesen `TEAM.apiUrl`, nicht mehr `CFG.apiUrl`.
+
+**Wichtig – geräteweise gemerkte Werte sind pro Team eigene Schlüssel**, sonst
+könnte auf einem Gerät der PIN oder die "wer bin ich"-Auswahl des einen Teams
+versehentlich beim anderen landen (unabhängige Tabellen können z. B. beide
+einen Trainer mit der ID `c1` haben – ohne Trennung würde ein falscher Name
+vorausgewählt):
+- `localStorage.tp.team` – zuletzt gewähltes Team (team-übergreifend, genau
+  ein Schlüssel).
+- `localStorage.tp.pin.<teamId>` – App-PIN je Team (ersetzt das frühere,
+  flache `tp.pin`).
+- `sessionStorage.tp.admin.<teamId>` – Admin-PIN je Team (ersetzt `tp.admin`).
+- `localStorage.tp.coach.<teamId>` – gewählter Trainer in der Planung je Team
+  (ersetzt `tp.coach`).
+
+Beim Abmelden (`ACT.lock`) oder Teamwechsel (`ACT.changeteam`) wird `UI`
+komplett zurückgesetzt (nicht nur `TEAM`/`DB`), damit keine Termin-ID des
+vorigen Teams als `UI.occ`/`UI.planOcc` hängen bleibt.
+
+**Ein weiteres Team hinzufügen:** siehe SETUP.md, Abschnitt „Weiteres Team
+hinzufügen" – im Kern: Google-Tabelle + `Code.gs`-Bereitstellung wie beim
+ersten Team (Code.gs bleibt dabei **unverändert**, nur `ERSTER_PIN` ist neu),
+dann einen Eintrag in `docs/config.js`s `teams`-Feld ergänzen.
 
 ---
 
@@ -351,6 +411,11 @@ unter `https://<user>.github.io/trainingspraesenz/`. Kein Build. Nach dem Push
 > Eine Änderung an `Code.gs` im Repo allein bewirkt **nichts** in Produktion,
 > bis Schritt 1–3 ausgeführt sind. Das ist die häufigste Fehlerquelle.
 
+**Bei mehreren Teams:** Schritt 1–4 sind pro Team einmal in JEDER Tabelle
+nötig – es gibt keinen Weg, alle Teams auf einmal zu aktualisieren. `Code.gs`
+selbst ist zwischen den Teams identisch; nur `ERSTER_PIN`/`ERSTER_ADMIN_PIN`
+(nur beim allerersten Bereitstellen relevant) unterscheiden sich.
+
 ---
 
 ## 9. Lokal entwickeln & testen
@@ -393,6 +458,11 @@ den Ziffernblock eingeben, Abläufe klicken, Server-Zustand gegenprüfen.
 7. Sicherheits-Set aus §7 (ohne PIN kein Zugriff, PIN nicht im Blatt,
    Formel-Injection entschärft, Limits greifen).
 8. Dunkles Design, kleines Gerät (320 px, kein horizontales Scrollen).
+9. Bei Änderungen an Team-/Speicher-Logik zusätzlich: zwei Teams mit
+   BEWUSST kollidierenden IDs (z. B. beide ein `coach.id === "c1"`) gegeneinander
+   testen. Muss zeigen: Team A akzeptiert nicht den PIN von Team B; die
+   "wer bin ich"-Auswahl und alle Daten von Team B tauchen nach dem Wechsel
+   zu Team A nicht auf; Wechsel + Reload landet wieder im richtigen Team.
 
 **Beim Testen gegen die echte Tabelle:** vorher den Zustand per `load` sichern
 und nach dem Test wiederherstellen (Testdaten hinterlassen sonst Spuren in der

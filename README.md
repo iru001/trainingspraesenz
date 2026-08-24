@@ -8,6 +8,11 @@ Die Daten liegen in einer **eigenen Google-Tabelle**: Dieses Repository enthält
 nur den Programmcode. Namen, Anwesenheiten und PIN bleiben im Google-Konto der
 Person, die die App einrichtet.
 
+**Mehrere Teams möglich:** Jedes Team bekommt eine eigene Google-Tabelle mit
+eigenem PIN, komplett unabhängig verwaltbar. Beim Öffnen der App wählt man
+zuerst das Team, dann folgt der PIN dieses Teams. Bei nur einem konfigurierten
+Team entfällt die Auswahl.
+
 **Einrichtung: siehe [SETUP.md](SETUP.md)** – rund 15 Minuten, einmalig.
 
 ## Aufbau

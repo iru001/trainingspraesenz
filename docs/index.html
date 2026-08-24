@@ -398,6 +398,8 @@ var ICON = {
 
 /* ===================== Zustand ===================== */
 var CFG = window.TP_CONFIG || {};
+var TEAMS = Array.isArray(CFG.teams) ? CFG.teams : [];
+var TEAM = null;         // gewaehltes Team (Objekt aus TEAMS) - null vor der Team-Auswahl
 var DB = null;           // wird nach der PIN-Eingabe vom Server geladen
 var REV = 0;             // Stand des Datenbestands (verhindert Überschreiben)
 var PIN = "";            // App-PIN dieser Sitzung
@@ -471,7 +473,7 @@ function timeRange(o){
 }
 
 /* ===================== Verbindung zum Server ===================== */
-function configured(){ return !!(CFG.apiUrl && /^https?:\/\//.test(CFG.apiUrl) && CFG.apiUrl.indexOf("HIER") < 0); }
+function configured(){ return !!(TEAM && TEAM.apiUrl && /^https?:\/\//.test(TEAM.apiUrl) && TEAM.apiUrl.indexOf("HIER") < 0); }
 
 async function apiCall(payload){
   if (!configured()) throw {error:"noconfig"};
@@ -480,7 +482,7 @@ async function apiCall(payload){
   try { var ac = new AbortController(); signal = ac.signal; stop = setTimeout(function(){ ac.abort(); }, 30000); } catch(e){}
   var res;
   try {
-    res = await fetch(CFG.apiUrl, {
+    res = await fetch(TEAM.apiUrl, {
       method: "POST",
       // text/plain vermeidet die Vorabanfrage, die Google-Skripte nicht beantworten
       headers: {"Content-Type": "text/plain;charset=utf-8"},
@@ -502,7 +504,7 @@ function apiSave(pin, state, rev){ return apiCall({action:"save", pin:pin, state
 
 function failText(err){
   var e = err && err.error;
-  if (e === "noconfig") return "Die App ist noch nicht mit der Google-Tabelle verbunden – in docs/config.js fehlt die Adresse des Skripts (siehe SETUP.md).";
+  if (e === "noconfig") return "Für dieses Team ist noch keine Google-Tabelle verbunden – in docs/config.js fehlt die Adresse des Skripts (siehe SETUP.md).";
   if (e === "http") return "Der Server hat mit Fehler " + err.status + " geantwortet. Ist das Skript als Web-App für «alle» freigegeben?";
   if (e === "busy") return "Gerade speichert jemand anderes. Bitte in ein paar Sekunden nochmals versuchen.";
   if (e === "timeout") return "Der Server antwortet nicht. Das Mobilfunknetz ist vielleicht zu langsam – bitte nochmals versuchen.";
@@ -521,7 +523,7 @@ function toast(msg){
 }
 
 async function boot(pin){
-  if (!pin) { render(); return false; }
+  if (!TEAM || !pin) { render(); return false; }
   LOADING = true; FAIL = null; render();
   try {
     var r = await apiLoad(pin);
@@ -529,7 +531,7 @@ async function boot(pin){
     if (!r.ok) {
       if (r.error === "pin") {
         PINBUF = "";
-        try { localStorage.removeItem("tp.pin"); } catch(e){}
+        setStoredPin(TEAM.id, "");
         render(); shake(); toast("Falscher PIN.");
         return false;
       }
@@ -541,7 +543,7 @@ async function boot(pin){
     SHEETURL = r.sheetUrl || "";
     UNLOCKED = true;
     PINBUF = "";
-    try { localStorage.setItem("tp.pin", pin); } catch(e){}
+    setStoredPin(TEAM.id, pin);
     checkAdmin();
     render();
     return true;
@@ -584,7 +586,7 @@ async function commit(mutate, msg, nextUI){
     }
     if (r.error === "pin") {
       DB = JSON.parse(backup); UNLOCKED = false; PINBUF = "";
-      try { localStorage.removeItem("tp.pin"); } catch(e){}
+      try { if (TEAM) localStorage.removeItem("tp.pin." + TEAM.id); } catch(e){}
       render(); toast("Der PIN wurde geändert. Bitte neu anmelden.");
       return false;
     }
@@ -634,7 +636,7 @@ async function commitAvailability(occId, coachId, status, reason){
       }
       if (r.error === "pin") {
         DB = JSON.parse(backup); UNLOCKED = false; PINBUF = "";
-        try { localStorage.removeItem("tp.pin"); } catch(e){}
+        try { if (TEAM) localStorage.removeItem("tp.pin." + TEAM.id); } catch(e){}
         render(); toast("Der PIN wurde geändert. Bitte neu anmelden.");
         return "fail";
       }
@@ -710,8 +712,8 @@ function activePlayers(){ return DB.players.filter(function(p){ return p.active 
 function activeCoaches(){ return DB.coaches.filter(function(c){ return c.active !== false; }).sort(sortName); }
 
 /* ===================== Trainer-Planung ===================== */
-function storedCoach(){ try { return localStorage.getItem("tp.coach") || ""; } catch(e){ return ""; } }
-function setStoredCoach(id){ try { if (id) localStorage.setItem("tp.coach", id); else localStorage.removeItem("tp.coach"); } catch(e){} }
+function storedCoach(){ try { return (TEAM && localStorage.getItem("tp.coach." + TEAM.id)) || ""; } catch(e){ return ""; } }
+function setStoredCoach(id){ try { if (!TEAM) return; if (id) localStorage.setItem("tp.coach." + TEAM.id, id); else localStorage.removeItem("tp.coach." + TEAM.id); } catch(e){} }
 function myCoachId(){
   var id = UI.myCoach || storedCoach();
   if (id && !byId(DB.coaches, id)) id = "";           // Trainer wurde geloescht
@@ -1172,7 +1174,7 @@ function adminSettings(){
     + 'Ohne ihn gibt der Server keine Daten heraus. Wer den PIN hat, kann Anwesenheiten erfassen und bearbeiten.</p>'
     + '<p class="small muted" style="margin:10px 0 0">Der <strong>Admin-PIN</strong> schützt diesen Bereich vor versehentlichen Änderungen, ist aber kein zweiter Sicherheitsriegel. '
     + 'Gib den App-PIN nur im Trainerteam weiter und ändere ihn, wenn jemand das Team verlässt.</p>'
-    + '<button class="btn btn-block noprint" style="margin-top:12px" data-act="lock">Auf diesem Gerät abmelden</button></div>'
+    + '<button class="btn btn-block noprint" style="margin-top:12px" data-act="lock">Abmelden' + (TEAMS.length > 1 ? " / Team wechseln" : "") + '</button></div>'
     + '<div class="eyebrow">Daten</div><div class="card" style="padding:13px">'
     + '<p class="small muted" style="margin:0 0 10px">Alle Anwesenheiten stehen laufend auch in der Google-Tabelle – dort lassen sie sich ansehen und '
     + 'über <em>Datei &rarr; Herunterladen &rarr; Microsoft Excel</em> als xlsx speichern.</p>'
@@ -1294,12 +1296,19 @@ function viewPlanDetail(){
   }
 }
 
-/* ===================== PIN-Sperre ===================== */
-function storedPin(){ try { return localStorage.getItem("tp.pin") || ""; } catch(e){ return ""; } }
+/* ===================== Team- und PIN-Sperre ===================== */
+// PIN, Admin-PIN und "wer bin ich" werden pro Team getrennt gemerkt (Schluessel
+// enthaelt die Team-ID) - sonst koennte beim Wechseln des Teams auf demselben
+// Geraet der PIN oder die Trainer-Auswahl des einen Teams beim anderen
+// landen, obwohl es voellig unabhaengige Tabellen mit unabhaengigen IDs sind.
+function storedTeam(){ try { return localStorage.getItem("tp.team") || ""; } catch(e){ return ""; } }
+function setStoredTeam(id){ try { if (id) localStorage.setItem("tp.team", id); else localStorage.removeItem("tp.team"); } catch(e){} }
+function storedPin(teamId){ try { return localStorage.getItem("tp.pin." + teamId) || ""; } catch(e){ return ""; } }
+function setStoredPin(teamId, pin){ try { if (pin) localStorage.setItem("tp.pin." + teamId, pin); else localStorage.removeItem("tp.pin." + teamId); } catch(e){} }
 function pinOf(kind){ return kind === "admin" ? ((DB && DB.settings.adminPin) || "") : PIN; }
 function checkAdmin(){
   ADMIN_OK = !DB.settings.adminPin;
-  try { if (!ADMIN_OK && sessionStorage.getItem("tp.admin") === DB.settings.adminPin) ADMIN_OK = true; } catch(e){}
+  try { if (!ADMIN_OK && TEAM && sessionStorage.getItem("tp.admin." + TEAM.id) === DB.settings.adminPin) ADMIN_OK = true; } catch(e){}
 }
 function addDigit(d){
   var kind = UNLOCKED ? "admin" : "app";
@@ -1329,13 +1338,16 @@ function viewLock(kind){
     ? '<button class="btn btn-primary btn-block" data-act="pinok"' + (LOADING || !PINBUF ? " disabled" : "") + ">"
       + (LOADING ? "Bitte warten …" : "Weiter") + "</button>"
     : "";
+  var teamName = DB ? (DB.settings.team || TITLE) : (TEAM ? TEAM.name : TITLE);
   return '<div class="lock" id="lock"><div class="lock-card">'
     + '<div class="lock-mark">' + (kind === "admin" ? "A" : "⚽") + "</div>"
-    + '<div class="lock-title">' + (kind === "admin" ? "Admin-Bereich" : (DB ? esc(DB.settings.team || TITLE) : TITLE)) + "</div>"
+    + '<div class="lock-title">' + (kind === "admin" ? "Admin-Bereich" : esc(teamName)) + "</div>"
     + '<p class="lock-sub">' + (kind === "admin" ? "Admin-PIN eingeben" : (LOADING ? "Daten werden geladen …" : "PIN eingeben, dann «Weiter»")) + "</p>"
     + '<div class="dots">' + dots + "</div>"
     + '<div class="keys">' + keys + "</div>"
     + (extra ? '<div style="width:100%;max-width:262px">' + extra + "</div>" : "")
+    + (kind === "app" && TEAMS.length > 1 && !LOADING
+        ? '<button class="btn btn-ghost btn-sm" data-act="changeteam">Anderes Team wählen</button>' : "")
     + (FAIL ? '<div class="banner" style="text-align:left">' + esc(FAIL)
         + '<div style="margin-top:10px"><button class="btn btn-sm" data-act="retry">Nochmals versuchen</button></div></div>' : "")
     + "</div></div>";
@@ -1343,7 +1355,7 @@ function viewLock(kind){
 function submitPin(kind){
   if (kind === "admin") {
     if (PINBUF === pinOf("admin")) {
-      try { sessionStorage.setItem("tp.admin", PINBUF); } catch(e){}
+      try { if (TEAM) sessionStorage.setItem("tp.admin." + TEAM.id, PINBUF); } catch(e){}
       PINBUF = ""; ADMIN_OK = true; render();
     } else {
       PINBUF = ""; render(); shake(); toast("Falscher Admin-PIN.");
@@ -1425,8 +1437,21 @@ function viewReport(){
   return h;
 }
 
+/* ===================== Team-Auswahl ===================== */
+function viewTeamPicker(){
+  return '<div class="lock"><div class="lock-card">'
+    + '<div class="lock-mark">⚽</div>'
+    + '<div class="lock-title">' + TITLE + '</div>'
+    + '<p class="lock-sub">Für welches Team?</p>'
+    + '<div class="stack" style="width:100%;max-width:280px">' + TEAMS.map(function(t){
+        return '<button class="btn btn-primary btn-block" data-act="chooseteam" data-id="' + esc(t.id) + '">' + esc(t.name) + "</button>";
+      }).join("") + "</div>"
+    + "</div></div>";
+}
+
 /* ===================== Rendering ===================== */
 function render(){
+  if (!TEAM) { el("root").innerHTML = TEAMS.length ? viewTeamPicker() : '<div class="lock"><div class="lock-card"><div class="lock-title">Kein Team eingerichtet</div><p class="lock-sub">In docs/config.js fehlt die Team-Liste.</p></div></div>'; return; }
   if (!UNLOCKED || !DB) { el("root").innerHTML = viewLock("app"); return; }
   var team = DB.settings.team || TITLE;
   var sub = DB.settings.season ? "Saison " + DB.settings.season : "Anwesenheit";
@@ -1524,8 +1549,29 @@ var ACT = {
   pindel: function(){ PINBUF = PINBUF.slice(0, -1); render(); },
   pinclear: function(){ PINBUF = ""; render(); },
   lock: function(){
-    try { localStorage.removeItem("tp.pin"); sessionStorage.removeItem("tp.admin"); } catch(e){}
-    PINBUF = ""; PIN = ""; DB = null; UNLOCKED = false; ADMIN_OK = false; UI.view = "events"; render();
+    var tid = TEAM && TEAM.id;
+    try {
+      if (tid) { localStorage.removeItem("tp.pin." + tid); sessionStorage.removeItem("tp.admin." + tid); }
+      setStoredTeam("");
+    } catch(e){}
+    PINBUF = ""; PIN = ""; DB = null; TEAM = null; UNLOCKED = false; ADMIN_OK = false;
+    UI = {view:"events", occ:null, planOcc:null, statType:"all", statRange:"season", statSort:"quote", adminTab:"players"};
+    render();
+  },
+  chooseteam: function(t){
+    var id = t.getAttribute("data-id");
+    TEAM = TEAMS.filter(function(x){ return x.id === id; })[0] || null;
+    if (!TEAM) return;
+    setStoredTeam(TEAM.id);
+    FAIL = null;
+    render();
+    var p = storedPin(TEAM.id);
+    if (p) boot(p);
+  },
+  changeteam: function(){
+    PINBUF = ""; FAIL = null; DB = null; PIN = ""; UNLOCKED = false; TEAM = null;
+    UI = {view:"events", occ:null, planOcc:null, statType:"all", statRange:"season", statSort:"quote", adminTab:"players"};
+    render();
   },
   open: function(t){ UI.occ = t.getAttribute("data-occ"); UI.confirm = null; go("record"); },
   adhoc: function(){ go("adhoc"); },
@@ -1697,11 +1743,11 @@ var ACT = {
     var pin = val("t-pin").replace(/\D/g, ""), apin = val("t-apin").replace(/\D/g, "");
     commit(function(db){ db.settings = {team: team, season: season, seasonStart: s, seasonEnd: e, pin: pin, adminPin: apin}; },
       "Gespeichert.").then(function(ok){
-        if (ok) {
+        if (ok && TEAM) {
           PIN = pin;   // ab jetzt gilt der neue PIN auch fuer diese Sitzung
           try {
-            if (pin) localStorage.setItem("tp.pin", pin); else localStorage.removeItem("tp.pin");
-            if (apin) sessionStorage.setItem("tp.admin", apin);
+            setStoredPin(TEAM.id, pin);
+            if (apin) sessionStorage.setItem("tp.admin." + TEAM.id, apin);
           } catch(e2){}
         }
       });
@@ -1711,7 +1757,7 @@ var ACT = {
       toast("Sicherung gespeichert.");
   },
   sheet: function(){ if (SHEETURL) window.open(SHEETURL, "_blank", "noopener"); },
-  retry: function(){ FAIL = null; boot(PIN || storedPin()); }
+  retry: function(){ FAIL = null; if (TEAM) boot(PIN || storedPin(TEAM.id)); }
 };
 
 /* ===================== Start ===================== */
@@ -1722,10 +1768,18 @@ document.addEventListener("keydown", function(ev){
   else if (ev.key === "Enter") { ev.preventDefault(); if (PINBUF) submitPin(UNLOCKED ? "admin" : "app"); }
 });
 document.addEventListener("visibilitychange", function(){ if (!document.hidden) refresh(); });
-window.addEventListener("online", function(){ if (FAIL) boot(PIN || storedPin()); });
+window.addEventListener("online", function(){ if (FAIL && TEAM) boot(PIN || storedPin(TEAM.id)); });
 
+// Team bestimmen: zuletzt gewaehltes Team, oder automatisch, wenn nur eines
+// konfiguriert ist. Danach, falls fuer dieses Team schon ein PIN gemerkt ist,
+// gleich versuchen anzumelden.
+(function(){
+  var savedTeamId = storedTeam();
+  if (savedTeamId) TEAM = TEAMS.filter(function(t){ return t.id === savedTeamId; })[0] || null;
+  if (!TEAM && TEAMS.length === 1) TEAM = TEAMS[0];
+})();
 render();
-if (storedPin()) boot(storedPin());
+if (TEAM) { var initialPin = storedPin(TEAM.id); if (initialPin) boot(initialPin); }
 
 })();
 </script>
