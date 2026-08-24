@@ -259,21 +259,33 @@ input::placeholder,textarea::placeholder{color:var(--ink-3)}
 .bar .b-absent{background:var(--bad)}
 .prow-num{font-family:Oswald,sans-serif;font-size:20px;font-weight:600;font-variant-numeric:tabular-nums;flex:none;width:62px;text-align:right}
 .prow-sub{font-size:12px;color:var(--ink-3);font-variant-numeric:tabular-nums}
-.avail-me{padding:13px;display:flex;flex-direction:column;gap:8px}
-.avail-me label.f{max-width:320px}
+.whoami{padding:12px 13px;display:flex;align-items:center;justify-content:space-between;gap:10px}
+.whoami span{font-size:14px}
+.pickcoach{display:flex;flex-direction:column;align-items:center;text-align:center;padding:28px 20px;gap:6px}
+.pickcoach p{margin:0 0 10px}
+
 .avlist{list-style:none;margin:0;padding:0;display:flex;flex-direction:column}
-.avlist li{display:flex;align-items:center;gap:10px;padding:10px 13px;border-top:1px solid var(--line)}
-.avlist li:first-child{border-top:0}
-.avlist .grow{min-width:0}
-.avlist .grow b{font-size:15px;display:block}
-.avlist .grow span{font-size:12px;color:var(--ink-3)}
-.avbtns{display:flex;gap:6px;flex:none}
-.avbtns button{
-  border:1px solid var(--line-2);background:var(--surface);color:var(--ink-2);border-radius:9px;
-  padding:8px 12px;font-size:13px;font-weight:700;min-height:36px;
+.avitem{border-top:1px solid var(--line);padding:11px 13px 13px;display:flex;flex-direction:column;gap:10px}
+.avitem:first-child{border-top:0}
+.avhead{display:flex;flex-direction:column;gap:2px;text-align:left;background:none;border:0;padding:0;color:inherit;font:inherit;width:100%}
+.avhead b{font-size:15px}
+.avhead span{font-size:12px;color:var(--ink-3)}
+.avtally{
+  display:flex;gap:14px;background:none;border:0;padding:0;font-size:14px;font-weight:700;
+  font-variant-numeric:tabular-nums;width:100%;text-align:left;color:inherit;
 }
-.avbtns button.yes[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
-.avbtns button.no[aria-pressed="true"]{background:var(--bad);border-color:var(--bad);color:#fff}
+.avtally span{display:inline-flex;align-items:center;gap:5px}
+.avtally .t-yes{color:var(--accent)}
+.avtally .t-maybe{color:var(--warn)}
+.avtally .t-no{color:var(--bad)}
+.avbtns{display:flex;gap:6px}
+.avbtns button{
+  flex:1;border:1px solid var(--line-2);background:var(--surface);color:var(--ink-2);border-radius:9px;
+  padding:9px 6px;font-size:17px;min-height:42px;
+}
+.avbtns button.yes[aria-pressed="true"]{background:var(--accent);border-color:var(--accent)}
+.avbtns button.maybe[aria-pressed="true"]{background:var(--warn);border-color:var(--warn)}
+.avbtns button.no[aria-pressed="true"]{background:var(--bad);border-color:var(--bad)}
 .avgroup{margin-top:14px}
 .avgroup h3{font-size:13px;font-weight:700;color:var(--ink-2);margin:0 0 6px;display:flex;align-items:center;gap:6px}
 .avnames{display:flex;flex-direction:column;gap:2px;font-size:14px}
@@ -741,6 +753,12 @@ function confirmedCoachIds(occId){
   var a = DB.availability[occId]; if (!a) return [];
   return activeCoaches().filter(function(c){ return a[c.id] && a[c.id].status === "confirmed"; }).map(function(c){ return c.id; });
 }
+function tallyFor(occId){
+  var t = {confirmed: 0, uncertain: 0, declined: 0};
+  var a = DB.availability[occId];
+  if (a) for (var cid in a) { var st = a[cid] && a[cid].status; if (t[st] !== undefined) t[st]++; }
+  return t;
+}
 
 /* ===================== Ansicht: Termine ===================== */
 function viewEvents(){
@@ -1200,26 +1218,32 @@ function viewAdhoc(){
 }
 
 /* ===================== Trainer-Planung (Zu-/Absagen) ===================== */
-function viewPlanning(){
+function viewPlanIdentity(){
   var coaches = activeCoaches();
+  if (!coaches.length) {
+    return '<div class="card empty">Noch keine Trainer erfasst. <button class="btn btn-sm" data-act="go" data-view="admin" data-tab="coaches" style="margin-top:10px">Trainer anlegen</button></div>';
+  }
+  return '<div class="card pickcoach">'
+    + '<div class="lock-mark">👤</div>'
+    + '<b>Wer bist du?</b>'
+    + '<p class="muted small">Wähle deinen Namen aus, um für anstehende Termine zu- oder abzusagen.</p>'
+    + '</div>'
+    + '<div class="card" style="padding:6px;margin-top:14px"><div class="stack-s">'
+    + coaches.map(function(c){
+        return '<button class="btn btn-block" data-act="chooseplan" data-id="' + esc(c.id) + '" style="justify-content:flex-start;text-align:left">' + esc(fullName(c)) + "</button>";
+      }).join("")
+    + "</div></div>";
+}
+
+function viewPlanning(){
   var me = myCoachId();
+  var meObj = byId(DB.coaches, me);
   var occs = planOccurrences();
 
-  var h = '<div class="card avail-me">'
-    + field("my-coach", "Wer bist du?", '<select id="my-coach" data-act="mycoach">'
-        + '<option value=""' + (me ? "" : " selected") + '>– bitte wählen –</option>'
-        + coaches.map(function(c){
-            return '<option value="' + c.id + '"' + (c.id === me ? " selected" : "") + '>' + esc(fullName(c)) + "</option>";
-          }).join("") + "</select>")
+  var h = '<div class="card whoami">'
+    + "<span>Du bist: <b>" + esc(meObj ? fullName(meObj) : "") + "</b></span>"
+    + '<button class="btn btn-sm" data-act="planswitch">Wechseln</button>'
     + "</div>";
-
-  if (!coaches.length) {
-    h += '<div class="card empty" style="margin-top:14px">Noch keine Trainer erfasst. <button class="btn btn-sm" data-act="go" data-view="admin" data-tab="coaches" style="margin-top:10px">Trainer anlegen</button></div>';
-    return h;
-  }
-  if (!me) {
-    h += '<div class="banner" style="margin-top:14px">Bitte oben auswählen, wer du bist – danach kannst du für die Termine zu- oder absagen.</div>';
-  }
 
   if (!occs.length) {
     h += '<div class="eyebrow">Anstehende Termine</div><div class="card empty">Keine anstehenden Termine bis Saisonende.</div>';
@@ -1234,16 +1258,23 @@ function viewPlanning(){
       h += '<div class="eyebrow">' + MONTH_LONG[d.getMonth()] + " " + d.getFullYear() + '</div><div class="card"><ul class="avlist">';
       month = key;
     }
-    var st = me ? availabilityFor(o.id, me).status : "pending";
-    h += '<li>'
-      + '<button class="grow" data-act="planopen" data-occ="' + esc(o.id) + '" style="text-align:left;background:none;border:0;padding:0;color:inherit;font:inherit">'
+    var st = availabilityFor(o.id, me).status;
+    var tl = tallyFor(o.id);
+    h += '<li class="avitem">'
+      + '<button class="avhead" data-act="planopen" data-occ="' + esc(o.id) + '">'
       + "<b>" + fmtShort(o.date) + " · " + esc(o.label || typeLabel(o.type)) + "</b>"
       + '<span><span class="pill ' + (o.type === "match" ? "pill-match" : "pill-training") + '" style="margin-right:6px">' + typeLabel(o.type) + "</span>"
       + (timeRange(o) || "") + "</span></button>"
-      + (me ? '<span class="avbtns">'
-          + '<button class="yes" data-act="quickavail" data-occ="' + esc(o.id) + '" data-status="confirmed" aria-pressed="' + (st === "confirmed") + '" aria-label="Zusagen">✓</button>'
-          + '<button class="no" data-act="quickavail" data-occ="' + esc(o.id) + '" data-status="declined" aria-pressed="' + (st === "declined") + '" aria-label="Absagen">✕</button>'
-          + "</span>" : "")
+      + '<button class="avtally" data-act="planopen" data-occ="' + esc(o.id) + '">'
+      + '<span class="t-yes">👍 ' + tl.confirmed + '</span>'
+      + '<span class="t-maybe">❓ ' + tl.uncertain + '</span>'
+      + '<span class="t-no">👎 ' + tl.declined + '</span>'
+      + "</button>"
+      + '<div class="avbtns">'
+      + '<button class="yes" data-act="quickavail" data-occ="' + esc(o.id) + '" data-status="confirmed" aria-pressed="' + (st === "confirmed") + '" aria-label="Verfügbar">👍</button>'
+      + '<button class="maybe" data-act="quickavail" data-occ="' + esc(o.id) + '" data-status="uncertain" aria-pressed="' + (st === "uncertain") + '" aria-label="Ungewiss">❓</button>'
+      + '<button class="no" data-act="quickavail" data-occ="' + esc(o.id) + '" data-status="declined" aria-pressed="' + (st === "declined") + '" aria-label="Nicht verfügbar">👎</button>'
+      + "</div>"
       + "</li>";
   });
   h += "</ul></div>";
@@ -1256,7 +1287,7 @@ function viewPlanDetail(){
   var coaches = activeCoaches();
   var me = myCoachId();
 
-  var groups = {confirmed: [], declined: [], pending: []};
+  var groups = {confirmed: [], uncertain: [], declined: [], pending: []};
   coaches.forEach(function(c){
     var a = availabilityFor(occ.id, c.id);
     groups[a.status].push({c: c, reason: a.reason});
@@ -1269,24 +1300,26 @@ function viewPlanDetail(){
     + "</div>";
 
   h += '<div class="card" style="padding:13px">'
-    + group("✅ Zugesagt", groups.confirmed, "yes")
-    + group("❌ Abgesagt", groups.declined, "no")
-    + group("⏳ Ausstehend", groups.pending, "wait")
+    + group("👍 Verfügbar", groups.confirmed)
+    + group("❓ Ungewiss", groups.uncertain)
+    + group("👎 Nicht verfügbar", groups.declined)
+    + group("⏳ Ausstehend", groups.pending)
     + "</div>";
 
   if (me) {
     var st = availabilityFor(occ.id, me).status;
     h += '<div class="eyebrow">Deine Antwort</div><div class="card" style="padding:13px">'
-      + '<div class="avbtns" style="justify-content:center">'
-      + '<button class="yes btn" data-act="quickavail" data-occ="' + esc(occ.id) + '" data-status="confirmed" aria-pressed="' + (st === "confirmed") + '" style="flex:1">✓ Zusagen</button>'
-      + '<button class="no btn" data-act="quickavail" data-occ="' + esc(occ.id) + '" data-status="declined" aria-pressed="' + (st === "declined") + '" style="flex:1">✕ Absagen</button>'
+      + '<div class="avbtns">'
+      + '<button class="yes" data-act="quickavail" data-occ="' + esc(occ.id) + '" data-status="confirmed" aria-pressed="' + (st === "confirmed") + '" style="font-size:13px">👍 Verfügbar</button>'
+      + '<button class="maybe" data-act="quickavail" data-occ="' + esc(occ.id) + '" data-status="uncertain" aria-pressed="' + (st === "uncertain") + '" style="font-size:13px">❓ Ungewiss</button>'
+      + '<button class="no" data-act="quickavail" data-occ="' + esc(occ.id) + '" data-status="declined" aria-pressed="' + (st === "declined") + '" style="font-size:13px">👎 Absagen</button>'
       + "</div></div>";
   } else {
-    h += '<div class="banner" style="margin-top:14px">Wähle auf der vorigen Seite aus, wer du bist, um selbst zu antworten.</div>';
+    h += '<div class="banner" style="margin-top:14px">Wähle in der Planung aus, wer du bist, um selbst zu antworten.</div>';
   }
   return h;
 
-  function group(title, list, cls){
+  function group(title, list){
     var out = '<div class="avgroup"><h3>' + title + " (" + list.length + ")</h3>";
     if (!list.length) { out += '<p class="avempty">niemand</p></div>'; return out; }
     out += '<div class="avnames">' + list.map(function(x){
@@ -1461,7 +1494,7 @@ function render(){
     : UI.view === "adhoc"      ? viewAdhoc()
     : UI.view === "report"     ? viewReport()
     : UI.view === "stats"      ? viewStats()
-    : UI.view === "planning"   ? viewPlanning()
+    : UI.view === "planning"   ? (myCoachId() ? viewPlanning() : viewPlanIdentity())
     : UI.view === "plandetail" ? viewPlanDetail()
     : UI.view === "admin"      ? (ADMIN_OK ? viewAdmin() : viewLock("admin"))
     : viewEvents();
@@ -1505,14 +1538,6 @@ document.addEventListener("input", function(ev){
   if (t.getAttribute && t.getAttribute("data-act") === "note" && UI.state) {
     UI.state.note = t.value;
     saveDraft(UI.occ, UI.state);
-  }
-});
-document.addEventListener("change", function(ev){
-  var t = ev.target;
-  if (t.getAttribute && t.getAttribute("data-act") === "mycoach") {
-    UI.myCoach = t.value || "";
-    setStoredCoach(UI.myCoach);
-    render();
   }
 });
 document.addEventListener("keydown", function(ev){
@@ -1581,12 +1606,23 @@ var ACT = {
     UI.occ = UI.adhoc.id; go("record");
   },
   planopen: function(t){ UI.planOcc = t.getAttribute("data-occ"); go("plandetail"); },
+  chooseplan: function(t){
+    var id = t.getAttribute("data-id");
+    UI.myCoach = id;
+    setStoredCoach(id);
+    render();
+  },
+  planswitch: function(){
+    UI.myCoach = "";
+    setStoredCoach("");
+    render();
+  },
   quickavail: function(t){
     var occId = t.getAttribute("data-occ"), status = t.getAttribute("data-status"), me = myCoachId();
     if (!me) { toast("Bitte zuerst auswählen, wer du bist."); return; }
     var current = availabilityFor(occId, me).status;
-    if (status === "confirmed") {
-      commitAvailability(occId, me, current === "confirmed" ? "pending" : "confirmed");
+    if (status === "confirmed" || status === "uncertain") {
+      commitAvailability(occId, me, current === status ? "pending" : status);
       return;
     }
     // Absagen: bei bereits aktiver Absage per erneutem Klick zuruecksetzen,

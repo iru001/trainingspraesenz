@@ -223,6 +223,11 @@ und Server hin- und herwandert und was in `_daten` liegt.
   `playerStats()`; wer die Definition ändert, muss Backend-`renderSheets` und den
   Bericht anpassen.
 - **`type`**: `"training" | "match"`.
+- **Status-Werte** in `availability[occId][coachId].status`: genau
+  `"confirmed" | "uncertain" | "declined"` (UI: 👍 Verfügbar / ❓ Ungewiss /
+  👎 Nicht verfügbar), `reason` (optional, Freitext) nur bei `"declined"`
+  relevant. Fehlt der Eintrag ganz, gilt der Trainer als `"pending"`
+  (⏳ Ausstehend) – dieser Wert wird nie explizit gespeichert.
 - **`availability`** ist bewusst sparse (kein Eintrag = `pending`), analog zu
   `entries` bei den Spielern. **Es gibt keine Vorab-Befüllung**: Weder beim
   Anlegen eines neuen Trainers noch beim Anlegen einer Serie/eines
@@ -234,6 +239,11 @@ und Server hin- und herwandert und was in `_daten` liegt.
   Terminen bräuchte einen Nachtrage-Mechanismus. Ein Eintrag entsteht nur,
   wenn ein Trainer tatsächlich antwortet; toggelt er zurück auf "pending",
   wird der Eintrag wieder gelöscht (siehe `commitAvailability()`).
+- **Identität in der Planung**: `myCoachId()` liefert die pro Gerät gemerkte
+  Trainer-ID (`storedCoach()`, Storage-Key `tp.coach.<teamId>`). Ist keine
+  gesetzt oder verweist sie auf einen gelöschten Trainer, zeigt der Tab
+  „Planung“ zuerst `viewPlanIdentity()` (Namensauswahl) statt der Übersicht
+  `viewPlanning()` – siehe `render()`-Routing für `UI.view === "planning"`.
 - **`active: false`** deaktiviert (pausiert) Spieler/Trainer/Serien, ohne
   Historie zu verlieren. Löschen entfernt zusätzlich Verweise in `records`.
 - **Zeiten**: `time`/`timeEnd` als `"HH:MM"`; leer erlaubt (z. B. Hallenturnier

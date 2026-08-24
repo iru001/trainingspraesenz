@@ -349,8 +349,9 @@ function renderSheets(state) {
       coaches.forEach(function (c) {
         var a = avail[occId] && avail[occId][c.id];
         if (!a || !a.status || a.status === 'pending') row.push('Ausstehend');
-        else if (a.status === 'confirmed') row.push('Zugesagt');
-        else if (a.status === 'declined') row.push('Abgesagt' + (a.reason ? ' (' + a.reason + ')' : ''));
+        else if (a.status === 'confirmed') row.push('Verfügbar');
+        else if (a.status === 'uncertain') row.push('Ungewiss');
+        else if (a.status === 'declined') row.push('Nicht verfügbar' + (a.reason ? ' (' + a.reason + ')' : ''));
         else row.push('');
       });
       rows.push(row);

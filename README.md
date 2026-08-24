@@ -48,10 +48,14 @@ statt die Arbeit des anderen zu überschreiben.
 - Zusätzliche Termine ausserhalb des Plans (Turnier, Zusatztraining) direkt erfassbar
 
 **Trainer-Planung**
-- Trainer sagen für anstehende Termine (bis Saisonende) im Voraus zu oder ab
-- Volle Transparenz: jeder mit App-PIN sieht zu jedem Termin, wer zugesagt,
-  abgesagt (mit Grund) oder noch nicht geantwortet hat
-- Eigene Auswahl («wer bin ich») wird pro Gerät gemerkt
+- Beim ersten Öffnen wählt jeder Trainer aus einer Liste, wer er ist – danach
+  auf dem Gerät gemerkt
+- Drei Antworten pro Termin: 👍 Verfügbar, ❓ Ungewiss, 👎 Nicht verfügbar
+  (mit optionalem Grund)
+- Zu jedem Termin direkt sichtbar, wie viele Trainer mit Ja/Ungewiss/Nein
+  geantwortet haben; die einzelnen Namen erst nach Antippen des Termins
+- Volle Transparenz: jeder mit App-PIN sieht, wer wie geantwortet oder noch
+  nicht reagiert hat
 - Zugesagte Trainer werden beim späteren Erfassen der Anwesenheit automatisch
   vorausgewählt
 
