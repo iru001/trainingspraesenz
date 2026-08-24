@@ -645,6 +645,12 @@ async function commit(mutate, msg, nextUI){
  */
 async function commitAvailability(occId, coachId, status, reason){
   if (BUSY) return false;
+  // Scrollposition festhalten: render() baut #root komplett neu auf und würde
+  // sonst bei jedem Zwischenschritt (optimistisch, nach dem Speichern, bei
+  // Fehlern) an den Seitenanfang zurückspringen - hier reagiert man auf einen
+  // Klick weit unten in einer langen Terminliste, ein Sprung nach oben stört.
+  var savedScroll = window.scrollY;
+  var reRender = function(){ UI.scroll = savedScroll; render(); };
   var mutate = function(db){
     if (status === "pending") {
       if (db.availability[occId]) {
@@ -660,11 +666,11 @@ async function commitAvailability(occId, coachId, status, reason){
     var backup = JSON.stringify(DB);
     BUSY = true;
     mutate(DB);
-    render();
+    reRender();
     try {
       var r = await apiSave(PIN, DB, REV);
       BUSY = false;
-      if (r.ok) { REV = Number(r.rev || REV + 1); DB.rev = REV; render(); return "ok"; }
+      if (r.ok) { REV = Number(r.rev || REV + 1); DB.rev = REV; reRender(); return "ok"; }
       if (r.error === "conflict" && r.state) {
         DB = normalize(r.state); REV = Number(DB.rev || 0);
         return "retry";
@@ -672,20 +678,20 @@ async function commitAvailability(occId, coachId, status, reason){
       if (r.error === "pin") {
         DB = JSON.parse(backup); UNLOCKED = false; PINBUF = "";
         try { if (TEAM) localStorage.removeItem("tp.pin." + TEAM.id); } catch(e){}
-        render(); toast("Der PIN wurde geändert. Bitte neu anmelden.");
+        reRender(); toast("Der PIN wurde geändert. Bitte neu anmelden.");
         return "fail";
       }
-      DB = JSON.parse(backup); render(); toast(r.message || failText({error: r.error}));
+      DB = JSON.parse(backup); reRender(); toast(r.message || failText({error: r.error}));
       return "fail";
     } catch(err) {
-      DB = JSON.parse(backup); BUSY = false; render();
+      DB = JSON.parse(backup); BUSY = false; reRender();
       toast(failText(err));
       return "fail";
     }
   };
   var res = await attempt();
   if (res === "retry") res = await attempt();
-  if (res === "retry") { render(); toast("Kurz nochmals versuchen – der Server ist gerade beschäftigt."); return false; }
+  if (res === "retry") { reRender(); toast("Kurz nochmals versuchen – der Server ist gerade beschäftigt."); return false; }
   return res === "ok";
 }
 
