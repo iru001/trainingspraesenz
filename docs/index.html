@@ -643,56 +643,71 @@ async function commit(mutate, msg, nextUI){
  * automatisches Wiederholen bei z.B. einer Notiz riskant, weil zwei Leute
  * dieselbe Stelle unterschiedlich geaendert haben koennten).
  */
-async function commitAvailability(occId, coachId, status, reason){
-  if (BUSY) return false;
-  // Scrollposition festhalten: render() baut #root komplett neu auf und würde
-  // sonst bei jedem Zwischenschritt (optimistisch, nach dem Speichern, bei
-  // Fehlern) an den Seitenanfang zurückspringen - hier reagiert man auf einen
-  // Klick weit unten in einer langen Terminliste, ein Sprung nach oben stört.
-  var savedScroll = window.scrollY;
-  var reRender = function(){ UI.scroll = savedScroll; render(); };
-  var mutate = function(db){
-    if (status === "pending") {
-      if (db.availability[occId]) {
-        delete db.availability[occId][coachId];
-        if (!Object.keys(db.availability[occId]).length) delete db.availability[occId];
-      }
-    } else {
-      db.availability[occId] = db.availability[occId] || {};
-      db.availability[occId][coachId] = (status === "declined") ? {status: status, reason: reason || ""} : {status: status};
+function applyAvailOp(db, op){
+  if (op.status === "pending") {
+    if (db.availability[op.occId]) {
+      delete db.availability[op.occId][op.coachId];
+      if (!Object.keys(db.availability[op.occId]).length) delete db.availability[op.occId];
     }
-  };
-  var attempt = async function(){
-    var backup = JSON.stringify(DB);
-    BUSY = true;
-    mutate(DB);
-    reRender();
+  } else {
+    db.availability[op.occId] = db.availability[op.occId] || {};
+    db.availability[op.occId][op.coachId] = (op.status === "declined") ? {status: op.status, reason: op.reason || ""} : {status: op.status};
+  }
+}
+
+var AVAIL_PENDING = [];   // noch nicht bestaetigte Zu-/Absagen, wartend auf Speicherung
+var AVAIL_SAVING = false;
+
+/**
+ * Speichert eine Zu-/Absage OHNE auf eine laufende Speicherung zu warten:
+ * Jeder Tipp wird sofort lokal angewendet und angezeigt, das eigentliche
+ * Speichern läuft im Hintergrund über eine Warteschlange. So kann man zügig
+ * durch viele Termine durchtippen, ohne nach jedem einzelnen auf den Server
+ * zu warten (der bisherige Weg über commit()-artiges Blockieren liess genau
+ * das nicht zu). Bei einem Konflikt (jemand anderes war schneller) werden
+ * alle noch offenen Tipps auf dem frischen Stand erneut angewendet, bevor
+ * weitergespeichert wird - dabei geht nichts verloren.
+ */
+function commitAvailability(occId, coachId, status, reason){
+  var op = {occId: occId, coachId: coachId, status: status, reason: reason};
+  applyAvailOp(DB, op);
+  AVAIL_PENDING.push(op);
+  UI.scroll = window.scrollY;
+  render();
+  runAvailabilitySaveLoop();
+  return true;
+}
+
+async function runAvailabilitySaveLoop(){
+  if (AVAIL_SAVING) return;   // eine Schleife läuft schon und holt neue Tipps automatisch mit
+  AVAIL_SAVING = true;
+  while (AVAIL_PENDING.length) {
+    var n = AVAIL_PENDING.length;
     try {
       var r = await apiSave(PIN, DB, REV);
-      BUSY = false;
-      if (r.ok) { REV = Number(r.rev || REV + 1); DB.rev = REV; reRender(); return "ok"; }
-      if (r.error === "conflict" && r.state) {
+      if (r.ok) {
+        REV = Number(r.rev || REV + 1); DB.rev = REV;
+        AVAIL_PENDING.splice(0, n);
+      } else if (r.error === "conflict" && r.state) {
         DB = normalize(r.state); REV = Number(DB.rev || 0);
-        return "retry";
-      }
-      if (r.error === "pin") {
-        DB = JSON.parse(backup); UNLOCKED = false; PINBUF = "";
+        AVAIL_PENDING.forEach(function(op){ applyAvailOp(DB, op); });
+        UI.scroll = window.scrollY; render();
+      } else if (r.error === "pin") {
+        UNLOCKED = false; PINBUF = "";
         try { if (TEAM) localStorage.removeItem("tp.pin." + TEAM.id); } catch(e){}
-        reRender(); toast("Der PIN wurde geändert. Bitte neu anmelden.");
-        return "fail";
+        AVAIL_PENDING.length = 0;
+        render(); toast("Der PIN wurde geändert. Bitte neu anmelden.");
+        break;
+      } else {
+        toast(r.message || failText({error: r.error}));
+        break;
       }
-      DB = JSON.parse(backup); reRender(); toast(r.message || failText({error: r.error}));
-      return "fail";
     } catch(err) {
-      DB = JSON.parse(backup); BUSY = false; reRender();
       toast(failText(err));
-      return "fail";
+      break;
     }
-  };
-  var res = await attempt();
-  if (res === "retry") res = await attempt();
-  if (res === "retry") { reRender(); toast("Kurz nochmals versuchen – der Server ist gerade beschäftigt."); return false; }
-  return res === "ok";
+  }
+  AVAIL_SAVING = false;
 }
 
 /* ===================== Datei-Download ===================== */
