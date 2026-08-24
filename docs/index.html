@@ -108,6 +108,8 @@ button{cursor:pointer}
 .stack-s{display:flex;flex-direction:column;gap:8px}
 .row{display:flex;align-items:center;gap:10px}
 .wrap{display:flex;flex-wrap:wrap;gap:8px}
+.ck{display:flex;align-items:center;gap:9px;font-size:14px;font-weight:600;color:var(--ink-2)}
+.ck input{width:19px;height:19px;accent-color:var(--accent);flex:0 0 auto}
 .grow{flex:1;min-width:0}
 .eyebrow{
   font-family:Oswald,sans-serif;font-weight:500;font-size:12px;letter-spacing:.14em;text-transform:uppercase;
@@ -463,6 +465,25 @@ function parseISO(s){
 function todayISO(){ return iso(new Date()); }
 function addDays(isoStr, n){ var d = parseISO(isoStr); d.setDate(d.getDate()+n); return iso(d); }
 function dowOf(isoStr){ var d = parseISO(isoStr); return d ? d.getDay() : 0; }
+
+// Schulferien Bülach - fest hinterlegt, da amtlich und über Jahre im Voraus bekannt.
+// Wöchentliche Serien lassen diese Zeiträume standardmässig aus (siehe plannedOccurrences()).
+var HOLIDAYS_BUELACH = [
+  {from:"2026-07-13", to:"2026-08-15"}, {from:"2026-10-05", to:"2026-10-17"}, {from:"2026-12-21", to:"2027-01-02"},
+  {from:"2027-04-26", to:"2027-05-08"}, {from:"2027-07-19", to:"2027-08-21"}, {from:"2027-10-11", to:"2027-10-23"}, {from:"2027-12-20", to:"2028-01-01"},
+  {from:"2028-04-17", to:"2028-04-29"}, {from:"2028-07-17", to:"2028-08-19"}, {from:"2028-10-09", to:"2028-10-21"}, {from:"2028-12-25", to:"2029-01-06"},
+  {from:"2029-04-23", to:"2029-05-05"}, {from:"2029-07-16", to:"2029-08-18"}, {from:"2029-10-08", to:"2029-10-20"}, {from:"2029-12-24", to:"2030-01-05"},
+  {from:"2030-04-22", to:"2030-05-04"}, {from:"2030-07-15", to:"2030-08-17"}, {from:"2030-10-07", to:"2030-10-19"}, {from:"2030-12-23", to:"2031-01-05"},
+  {from:"2031-04-14", to:"2031-04-26"}, {from:"2031-07-14", to:"2031-08-16"}, {from:"2031-10-06", to:"2031-10-18"}, {from:"2031-12-22", to:"2032-01-03"},
+  {from:"2032-04-19", to:"2032-05-01"}, {from:"2032-07-12", to:"2032-08-14"}, {from:"2032-10-04", to:"2032-10-16"}, {from:"2032-12-20", to:"2033-01-01"},
+  {from:"2033-04-18", to:"2033-04-30"}, {from:"2033-07-18", to:"2033-08-20"}
+];
+function isSchoolHoliday(isoStr){
+  for (var i = 0; i < HOLIDAYS_BUELACH.length; i++) {
+    if (isoStr >= HOLIDAYS_BUELACH[i].from && isoStr <= HOLIDAYS_BUELACH[i].to) return true;
+  }
+  return false;
+}
 function fmtDate(isoStr){
   var d = parseISO(isoStr); if (!d) return isoStr || "";
   return DOW[d.getDay()] + ", " + d.getDate() + ". " + MON_S[d.getMonth()] + " " + d.getFullYear();
@@ -698,7 +719,10 @@ function plannedOccurrences(fromISO, toISO){
     var d = parseISO(s), guard = 0;
     while (d.getDay() !== Number(r.weekday) && guard++ < 7) d.setDate(d.getDate()+1);
     while (iso(d) <= e && guard++ < 800) {
-      out.push({id: r.id + "|" + iso(d), date: iso(d), time: r.time || "", timeEnd: r.timeEnd || "", type: r.type, label: r.label || "", ruleId: r.id});
+      var dISO = iso(d);
+      if (r.duringHolidays || !isSchoolHoliday(dISO)) {
+        out.push({id: r.id + "|" + dISO, date: dISO, time: r.time || "", timeEnd: r.timeEnd || "", type: r.type, label: r.label || "", ruleId: r.id});
+      }
       d.setDate(d.getDate()+7);
     }
   }
@@ -1139,7 +1163,8 @@ function adminPlan(){
       return '<div class="item' + (r.active === false ? " off" : "") + '"><span class="grow"><b>' + DOW[r.weekday] + "</b>"
         + (r.time ? " &middot; " + esc(timeRange(r)) : "")
         + '<br><span class="small muted"><span class="pill ' + (r.type === "match" ? "pill-match" : "pill-training") + '">' + typeLabel(r.type) + "</span> "
-        + esc(r.label || "") + (r.from || r.to ? " &middot; " + (r.from ? "ab " + fmtShort(r.from) : "") + (r.to ? " bis " + fmtShort(r.to) : "") : "") + "</span></span>"
+        + esc(r.label || "") + (r.from || r.to ? " &middot; " + (r.from ? "ab " + fmtShort(r.from) : "") + (r.to ? " bis " + fmtShort(r.to) : "") : "")
+        + (r.duringHolidays ? " &middot; auch in den Ferien" : "") + "</span></span>"
         + '<button class="btn btn-sm" data-act="togglerule" data-id="' + r.id + '">' + (r.active === false ? "Aktivieren" : "Pausieren") + "</button>"
         + confirmRow(r.id, "Löschen", "delrule") + "</div>";
     }).join("") + "</div>"
@@ -1155,7 +1180,8 @@ function adminPlan(){
     + '</div><div class="formgrid" style="margin-top:10px">'
     + field("r-from", "Gültig ab", '<input type="date" id="r-from" value="' + esc(DB.settings.seasonStart || "") + '">')
     + field("r-to", "Gültig bis", '<input type="date" id="r-to" value="' + esc(DB.settings.seasonEnd || "") + '">')
-    + '</div><button class="btn btn-primary btn-block" style="margin-top:10px" data-act="addrule">Serie hinzufügen</button></div>';
+    + '</div><label class="ck" style="margin-top:12px"><input type="checkbox" id="r-holidays">Auch während Schulferien?</label>'
+    + '<button class="btn btn-primary btn-block" style="margin-top:10px" data-act="addrule">Serie hinzufügen</button></div>';
 
   h += '<div class="eyebrow">Einzeltermine</div>';
   var sing = DB.singles.slice().sort(sortByDate).reverse();
@@ -1755,9 +1781,10 @@ var ACT = {
   },
   addrule: function(){
     var time = val("r-time");
+    var duringHolidays = !!(el("r-holidays") && el("r-holidays").checked);
     commit(function(db){
       db.rules.push({id: uid("r"), type: val("r-type"), weekday: Number(val("r-day")), time: time, timeEnd: val("r-end"),
-        label: val("r-label"), from: val("r-from"), to: val("r-to"), active: true});
+        label: val("r-label"), from: val("r-from"), to: val("r-to"), active: true, duringHolidays: duringHolidays});
     }, "Serie hinzugefügt.");
   },
   togglerule: function(t){

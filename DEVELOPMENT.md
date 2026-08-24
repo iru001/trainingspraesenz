@@ -179,7 +179,8 @@ und Server hin- und herwandert und was in `_daten` liegt.
   "rules": [                 // wöchentlich wiederkehrende Termine (Serien)
     { "id": "r-ab12cd", "type": "training", "weekday": 2, "time": "18:00",
       "timeEnd": "19:30", "label": "Haupttraining",
-      "from": "2026-08-18", "to": "2027-06-30", "active": true }
+      "from": "2026-08-18", "to": "2027-06-30", "active": true,
+      "duringHolidays": false }   // optional, fehlt = false, siehe unten
   ],
   "singles": [               // Einzeltermine (z. B. Turniere)
     { "id": "s1", "type": "match", "date": "2026-08-22", "time": "12:00",
@@ -223,6 +224,14 @@ und Server hin- und herwandert und was in `_daten` liegt.
   `playerStats()`; wer die Definition ändert, muss Backend-`renderSheets` und den
   Bericht anpassen.
 - **`type`**: `"training" | "match"`.
+- **`rules[].duringHolidays`**: steuert, ob eine wöchentliche Serie auch während
+  der Schulferien Termine erzeugt. Standard/fehlendes Feld = `false` (Ferien
+  werden ausgelassen). Die Ferientermine selbst sind fest als `HOLIDAYS_BUELACH`
+  (Array von `{from, to}`-ISO-Zeiträumen) im Frontend hinterlegt und werden in
+  `plannedOccurrences()` geprüft (`isSchoolHoliday()`); `singles` sind davon
+  nicht betroffen – Einzeltermine finden immer statt, unabhängig von Ferien.
+  Weitere Kantone/Gemeinden würden eine zweite Liste plus Auswahl in den
+  Team-Einstellungen brauchen, aktuell ist nur Bülach hinterlegt.
 - **Status-Werte** in `availability[occId][coachId].status`: genau
   `"confirmed" | "uncertain" | "declined"` (UI: 👍 Verfügbar / ❓ Ungewiss /
   👎 Nicht verfügbar), `reason` (optional, Freitext) nur bei `"declined"`
