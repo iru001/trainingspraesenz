@@ -271,6 +271,42 @@ function coachNames(state, ids) {
   }).filter(function (x) { return x; }).join(', ');
 }
 
+/**
+ * Loest eine Termin-ID wieder zu Datum/Art/Bezeichnung auf. Termin-IDs kommen
+ * in drei Formen vor (siehe DEVELOPMENT.md):
+ *  - "<ruleId>|<Datum>"  aus einer woechentlichen Serie
+ *  - "<singleId>"        ein Einzeltermin, ID = state.singles[].id
+ *  - dieselbe ID kann auch bereits als state.records[].id existieren, wenn
+ *    die Anwesenheit fuer diesen Termin schon erfasst wurde
+ * Gibt null zurueck, wenn der Termin (Serie/Einzeltermin) geloescht wurde.
+ */
+function occInfo(state, occId) {
+  var i;
+  for (i = 0; i < state.records.length; i++) {
+    if (state.records[i].id === occId) {
+      var r = state.records[i];
+      return { date: r.date, type: r.type, label: r.label, time: r.time, timeEnd: r.timeEnd };
+    }
+  }
+  for (i = 0; i < state.singles.length; i++) {
+    if (state.singles[i].id === occId) {
+      var s = state.singles[i];
+      return { date: s.date, type: s.type, label: s.label, time: s.time, timeEnd: s.timeEnd };
+    }
+  }
+  var pipe = occId.indexOf('|');
+  if (pipe > 0) {
+    var ruleId = occId.substring(0, pipe), date = occId.substring(pipe + 1);
+    for (i = 0; i < state.rules.length; i++) {
+      if (state.rules[i].id === ruleId) {
+        var ru = state.rules[i];
+        return { date: date, type: ru.type, label: ru.label, time: ru.time, timeEnd: ru.timeEnd };
+      }
+    }
+  }
+  return null;
+}
+
 function renderSheets(state) {
   var players = state.players.slice().sort(byLast);
   var recs = state.records.slice().sort(function (a, b) { return a.date < b.date ? -1 : a.date > b.date ? 1 : 0; });
@@ -292,6 +328,35 @@ function renderSheets(state) {
     rows.push([c.last || '', c.first || '', c.role || '', c.active === false ? 'inaktiv' : 'aktiv', n]);
   });
   put(sh, rows);
+
+  // --- Trainer-Planung (Zu-/Absagen) ---
+  // Zeigt nur Termine, zu denen mindestens eine Antwort vorliegt (Object.keys
+  // von state.availability) - Termine ganz ohne Antwort tauchen hier bewusst
+  // nicht auf, damit das Blatt nicht mit weit in der Zukunft liegenden,
+  // unbeantworteten Terminen ueberladen wird.
+  var avail = state.availability || {};
+  var occIds = Object.keys(avail).sort();
+  if (occIds.length) {
+    sh = sheetNamed('Trainerplanung');
+    var coaches = state.coaches.slice().sort(byLast);
+    var head2 = ['Datum', 'Wochentag', 'Art', 'Bezeichnung'].concat(
+      coaches.map(function (c) { return nameOf(c); }));
+    rows = [head2];
+    occIds.forEach(function (occId) {
+      var info = occInfo(state, occId);
+      if (!info) return; // Termin (Serie/Einzeltermin) wurde inzwischen geloescht
+      var row = [fmtDay(info.date), weekdayOf(info.date), info.type === 'match' ? 'Wettkampf' : 'Training', info.label || ''];
+      coaches.forEach(function (c) {
+        var a = avail[occId] && avail[occId][c.id];
+        if (!a || !a.status || a.status === 'pending') row.push('Ausstehend');
+        else if (a.status === 'confirmed') row.push('Zugesagt');
+        else if (a.status === 'declined') row.push('Abgesagt' + (a.reason ? ' (' + a.reason + ')' : ''));
+        else row.push('');
+      });
+      rows.push(row);
+    });
+    put(sh, rows);
+  }
 
   // --- Auswertung ---
   var stats = {};
@@ -357,6 +422,8 @@ function renderSheets(state) {
     ['(W)', 'Wettkampf statt Training'],
     ['', ''],
     ['Quote', '(anwesend + verspätet) geteilt durch die erfassten Termine des Spielers'],
+    ['', ''],
+    ['Trainerplanung', 'zeigt nur Termine, zu denen mindestens ein Trainer bereits zu- oder abgesagt hat'],
     ['Achtung', 'Diese Blätter werden bei jeder Speicherung in der App neu geschrieben. Eigene Eingaben hier gehen verloren.']
   ]);
 }

@@ -85,7 +85,7 @@ button{cursor:pointer}
   position:fixed;left:0;right:0;bottom:0;z-index:30;background:var(--surface);
   border-top:1px solid var(--line);padding-bottom:env(safe-area-inset-bottom);
 }
-.nav-in{max-width:900px;margin:0 auto;display:grid;grid-template-columns:repeat(3,1fr)}
+.nav-in{max-width:900px;margin:0 auto;display:grid;grid-template-columns:repeat(4,1fr)}
 .nav button{
   background:none;border:0;padding:9px 4px 11px;display:flex;flex-direction:column;align-items:center;gap:3px;
   color:var(--ink-3);font-size:11px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;
@@ -93,6 +93,12 @@ button{cursor:pointer}
 }
 .nav button svg{width:22px;height:22px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
 .nav button[aria-current="page"]{color:var(--accent);border-top-color:var(--accent)}
+.nav button{position:relative}
+.navbadge{
+  position:absolute;top:5px;right:calc(50% - 20px);min-width:16px;height:16px;padding:0 3px;
+  border-radius:999px;background:var(--bad);color:#fff;font-size:10px;font-weight:700;
+  display:flex;align-items:center;justify-content:center;line-height:1;
+}
 
 /* ---------- building blocks ---------- */
 .card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--shadow)}
@@ -146,6 +152,9 @@ input::placeholder,textarea::placeholder{color:var(--ink-3)}
 .pill-match{background:var(--info-soft);color:var(--info);border-color:color-mix(in srgb,var(--info) 30%,transparent)}
 .pill-open{background:var(--warn-soft);color:var(--warn);border-color:color-mix(in srgb,var(--warn) 30%,transparent)}
 .pill-done{background:var(--surface-2);color:var(--ink-2);border-color:var(--line)}
+.pill-yes{background:var(--accent-soft);color:var(--accent);border-color:color-mix(in srgb,var(--accent) 25%,transparent)}
+.pill-no{background:var(--bad-soft);color:var(--bad);border-color:color-mix(in srgb,var(--bad) 25%,transparent)}
+.pill-wait{background:var(--surface-2);color:var(--ink-3);border-color:var(--line)}
 
 .banner{
   border-radius:var(--r-s);padding:11px 13px;font-size:14px;line-height:1.45;
@@ -250,6 +259,27 @@ input::placeholder,textarea::placeholder{color:var(--ink-3)}
 .bar .b-absent{background:var(--bad)}
 .prow-num{font-family:Oswald,sans-serif;font-size:20px;font-weight:600;font-variant-numeric:tabular-nums;flex:none;width:62px;text-align:right}
 .prow-sub{font-size:12px;color:var(--ink-3);font-variant-numeric:tabular-nums}
+.avail-me{padding:13px;display:flex;flex-direction:column;gap:8px}
+.avail-me label.f{max-width:320px}
+.avlist{list-style:none;margin:0;padding:0;display:flex;flex-direction:column}
+.avlist li{display:flex;align-items:center;gap:10px;padding:10px 13px;border-top:1px solid var(--line)}
+.avlist li:first-child{border-top:0}
+.avlist .grow{min-width:0}
+.avlist .grow b{font-size:15px;display:block}
+.avlist .grow span{font-size:12px;color:var(--ink-3)}
+.avbtns{display:flex;gap:6px;flex:none}
+.avbtns button{
+  border:1px solid var(--line-2);background:var(--surface);color:var(--ink-2);border-radius:9px;
+  padding:8px 12px;font-size:13px;font-weight:700;min-height:36px;
+}
+.avbtns button.yes[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+.avbtns button.no[aria-pressed="true"]{background:var(--bad);border-color:var(--bad);color:#fff}
+.avgroup{margin-top:14px}
+.avgroup h3{font-size:13px;font-weight:700;color:var(--ink-2);margin:0 0 6px;display:flex;align-items:center;gap:6px}
+.avnames{display:flex;flex-direction:column;gap:2px;font-size:14px}
+.avnames .why{color:var(--ink-3);font-size:12px}
+.avempty{font-size:13px;color:var(--ink-3);padding:2px 0}
+
 .tblwrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
 table.grid{border-collapse:collapse;width:100%;font-size:14px}
 table.grid th,table.grid td{padding:8px 10px;text-align:left;border-bottom:1px solid var(--line);white-space:nowrap}
@@ -326,6 +356,16 @@ table.grid td.num{text-align:right;font-variant-numeric:tabular-nums}
 </head>
 <body>
 <div id="root"></div>
+<dialog id="reasonDlg" class="dlg">
+  <div class="dlg-in stack-s">
+    <b style="font-family:Oswald,sans-serif;font-size:17px">Absagegrund (optional)</b>
+    <input type="text" id="reasonInput" placeholder="z. B. Krank, Arbeit" maxlength="120" autocomplete="off">
+    <div class="wrap" style="justify-content:flex-end;margin-top:2px">
+      <button type="button" class="btn btn-ghost" data-act="reasoncancel">Abbrechen</button>
+      <button type="button" class="btn btn-danger" data-act="reasonok">Absagen</button>
+    </div>
+  </div>
+</dialog>
 <script src="config.js"></script>
 <script id="app-code">
 
@@ -352,7 +392,8 @@ var ICON = {
   check:'<svg viewBox="0 0 24 24"><path d="M4 12.5l5.2 5.2L20 7"/></svg>',
   pen:'<svg viewBox="0 0 24 24"><path d="M4 20h4L19 9a2.4 2.4 0 0 0-3.4-3.4L4.6 16.6 4 20z"/></svg>',
   trash:'<svg viewBox="0 0 24 24"><path d="M4 7h16M9 7V4.6h6V7M6.5 7l.8 13h9.4l.8-13"/></svg>',
-  arrow:'<svg viewBox="0 0 24 24" style="width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round"><path d="M15 5l-7 7 7 7"/></svg>'
+  arrow:'<svg viewBox="0 0 24 24" style="width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round"><path d="M15 5l-7 7 7 7"/></svg>',
+  plan:'<svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="17" rx="2.5"/><path d="M8 2.6v3M16 2.6v3M4 9.5h16"/><path d="M8.3 14l2 2 4.6-4.8"/></svg>'
 };
 
 /* ===================== Zustand ===================== */
@@ -369,6 +410,7 @@ var PINBUF = "";
 var BUSY = false;
 var LOADING = false;
 var FAIL = null;         // Text des letzten Verbindungsfehlers
+var PLAN_DECLINE = null; // {occ, coach} waehrend der Absagegrund-Dialog offen ist
 
 try {
   var savedUI = sessionStorage.getItem("tp.ui");
@@ -382,6 +424,7 @@ function normalize(d){
   ["team","season","seasonStart","seasonEnd","pin","adminPin"].forEach(function(k){ d.settings[k] = d.settings[k] || ""; });
   ["coaches","players","rules","singles","records"].forEach(function(k){ if (!Array.isArray(d[k])) d[k] = []; });
   d.players.forEach(function(p){ delete p.birth; });   // Geburtsdaten werden bewusst nicht gespeichert
+  if (!d.availability || typeof d.availability !== "object" || Array.isArray(d.availability)) d.availability = {};
   return d;
 }
 
@@ -554,6 +597,61 @@ async function commit(mutate, msg, nextUI){
   }
 }
 
+/**
+ * Speichert eine einzelne Zu-/Absage. Nutzt denselben Speicherweg wie commit(),
+ * wiederholt bei einem Konflikt (jemand anderes war schneller) EINMAL
+ * automatisch auf dem frischen Stand - sicher, weil eine Zu-/Absage nur eine
+ * einzelne, von anderen Aenderungen unabhaengige Stelle im Datenbestand
+ * betrifft. commit() selbst bleibt dafuer unveraendert (dort waere ein
+ * automatisches Wiederholen bei z.B. einer Notiz riskant, weil zwei Leute
+ * dieselbe Stelle unterschiedlich geaendert haben koennten).
+ */
+async function commitAvailability(occId, coachId, status, reason){
+  if (BUSY) return false;
+  var mutate = function(db){
+    if (status === "pending") {
+      if (db.availability[occId]) {
+        delete db.availability[occId][coachId];
+        if (!Object.keys(db.availability[occId]).length) delete db.availability[occId];
+      }
+    } else {
+      db.availability[occId] = db.availability[occId] || {};
+      db.availability[occId][coachId] = (status === "declined") ? {status: status, reason: reason || ""} : {status: status};
+    }
+  };
+  var attempt = async function(){
+    var backup = JSON.stringify(DB);
+    BUSY = true;
+    mutate(DB);
+    render();
+    try {
+      var r = await apiSave(PIN, DB, REV);
+      BUSY = false;
+      if (r.ok) { REV = Number(r.rev || REV + 1); DB.rev = REV; render(); return "ok"; }
+      if (r.error === "conflict" && r.state) {
+        DB = normalize(r.state); REV = Number(DB.rev || 0);
+        return "retry";
+      }
+      if (r.error === "pin") {
+        DB = JSON.parse(backup); UNLOCKED = false; PINBUF = "";
+        try { localStorage.removeItem("tp.pin"); } catch(e){}
+        render(); toast("Der PIN wurde geändert. Bitte neu anmelden.");
+        return "fail";
+      }
+      DB = JSON.parse(backup); render(); toast(r.message || failText({error: r.error}));
+      return "fail";
+    } catch(err) {
+      DB = JSON.parse(backup); BUSY = false; render();
+      toast(failText(err));
+      return "fail";
+    }
+  };
+  var res = await attempt();
+  if (res === "retry") res = await attempt();
+  if (res === "retry") { render(); toast("Kurz nochmals versuchen – der Server ist gerade beschäftigt."); return false; }
+  return res === "ok";
+}
+
 /* ===================== Datei-Download ===================== */
 function download(filename, text, mime){
   try {
@@ -610,6 +708,37 @@ function clearDraft(id){ try { localStorage.removeItem(draftKey(id)); } catch(e)
 
 function activePlayers(){ return DB.players.filter(function(p){ return p.active !== false; }).sort(sortName); }
 function activeCoaches(){ return DB.coaches.filter(function(c){ return c.active !== false; }).sort(sortName); }
+
+/* ===================== Trainer-Planung ===================== */
+function storedCoach(){ try { return localStorage.getItem("tp.coach") || ""; } catch(e){ return ""; } }
+function setStoredCoach(id){ try { if (id) localStorage.setItem("tp.coach", id); else localStorage.removeItem("tp.coach"); } catch(e){} }
+function myCoachId(){
+  var id = UI.myCoach || storedCoach();
+  if (id && !byId(DB.coaches, id)) id = "";           // Trainer wurde geloescht
+  return id;
+}
+function planOccurrences(){
+  return plannedOccurrences(todayISO(), seasonTo())
+    .filter(function(o){ return o.date >= todayISO(); })
+    .sort(sortByDate);
+}
+function availabilityFor(occId, coachId){
+  var a = DB.availability[occId] && DB.availability[occId][coachId];
+  return (a && a.status) ? a : {status: "pending"};
+}
+function pendingCountFor(coachId){
+  if (!coachId) return 0;
+  var n = 0;
+  planOccurrences().forEach(function(o){ if (availabilityFor(o.id, coachId).status === "pending") n++; });
+  return n;
+}
+function confirmedCoachIds(occId){
+  // Schlaegt beim Start einer neuen Erfassung die Trainer vor, die zugesagt
+  // haben - reine Vorbelegung eines noch ungespeicherten Entwurfs, veraendert
+  // nie eine bereits bestehende Erfassung oder einen laufenden Entwurf.
+  var a = DB.availability[occId]; if (!a) return [];
+  return activeCoaches().filter(function(c){ return a[c.id] && a[c.id].status === "confirmed"; }).map(function(c){ return c.id; });
+}
 
 /* ===================== Ansicht: Termine ===================== */
 function viewEvents(){
@@ -689,7 +818,7 @@ function viewRecord(){
   var rec = occ.rec || null;
   var draft = loadDraft(occ.id);
   var state = draft || (rec ? {entries: Object.assign({}, rec.entries), coachIds: (rec.coachIds || []).slice(), note: rec.note || ""}
-                            : {entries: {}, coachIds: [], note: ""});
+                            : {entries: {}, coachIds: confirmedCoachIds(occ.id), note: ""});
   UI.state = state;
 
   var players = activePlayers();
@@ -1068,6 +1197,103 @@ function viewAdhoc(){
     + '</div><button class="btn btn-primary btn-block" style="margin-top:12px" data-act="adhocgo">Weiter zur Anwesenheit</button></div>';
 }
 
+/* ===================== Trainer-Planung (Zu-/Absagen) ===================== */
+function viewPlanning(){
+  var coaches = activeCoaches();
+  var me = myCoachId();
+  var occs = planOccurrences();
+
+  var h = '<div class="card avail-me">'
+    + field("my-coach", "Wer bist du?", '<select id="my-coach" data-act="mycoach">'
+        + '<option value=""' + (me ? "" : " selected") + '>– bitte wählen –</option>'
+        + coaches.map(function(c){
+            return '<option value="' + c.id + '"' + (c.id === me ? " selected" : "") + '>' + esc(fullName(c)) + "</option>";
+          }).join("") + "</select>")
+    + "</div>";
+
+  if (!coaches.length) {
+    h += '<div class="card empty" style="margin-top:14px">Noch keine Trainer erfasst. <button class="btn btn-sm" data-act="go" data-view="admin" data-tab="coaches" style="margin-top:10px">Trainer anlegen</button></div>';
+    return h;
+  }
+  if (!me) {
+    h += '<div class="banner" style="margin-top:14px">Bitte oben auswählen, wer du bist – danach kannst du für die Termine zu- oder absagen.</div>';
+  }
+
+  if (!occs.length) {
+    h += '<div class="eyebrow">Anstehende Termine</div><div class="card empty">Keine anstehenden Termine bis Saisonende.</div>';
+    return h;
+  }
+  var MONTH_LONG = ["Januar","Februar","März","April","Mai","Juni","Juli","August","September","Oktober","November","Dezember"];
+  var month = null;
+  occs.forEach(function(o){
+    var d = parseISO(o.date), key = d.getFullYear() + "-" + d.getMonth();
+    if (key !== month) {
+      if (month !== null) h += "</ul></div>";
+      h += '<div class="eyebrow">' + MONTH_LONG[d.getMonth()] + " " + d.getFullYear() + '</div><div class="card"><ul class="avlist">';
+      month = key;
+    }
+    var st = me ? availabilityFor(o.id, me).status : "pending";
+    h += '<li>'
+      + '<button class="grow" data-act="planopen" data-occ="' + esc(o.id) + '" style="text-align:left;background:none;border:0;padding:0;color:inherit;font:inherit">'
+      + "<b>" + fmtShort(o.date) + " · " + esc(o.label || typeLabel(o.type)) + "</b>"
+      + '<span><span class="pill ' + (o.type === "match" ? "pill-match" : "pill-training") + '" style="margin-right:6px">' + typeLabel(o.type) + "</span>"
+      + (timeRange(o) || "") + "</span></button>"
+      + (me ? '<span class="avbtns">'
+          + '<button class="yes" data-act="quickavail" data-occ="' + esc(o.id) + '" data-status="confirmed" aria-pressed="' + (st === "confirmed") + '" aria-label="Zusagen">✓</button>'
+          + '<button class="no" data-act="quickavail" data-occ="' + esc(o.id) + '" data-status="declined" aria-pressed="' + (st === "declined") + '" aria-label="Absagen">✕</button>'
+          + "</span>" : "")
+      + "</li>";
+  });
+  h += "</ul></div>";
+  return h;
+}
+
+function viewPlanDetail(){
+  var occ = plannedOccurrences(todayISO(), seasonTo()).filter(function(o){ return o.id === UI.planOcc; })[0];
+  if (!occ) return '<div class="card empty"><b>Termin nicht gefunden</b>Er wurde im Admin-Bereich inzwischen verändert oder gelöscht.</div>';
+  var coaches = activeCoaches();
+  var me = myCoachId();
+
+  var groups = {confirmed: [], declined: [], pending: []};
+  coaches.forEach(function(c){
+    var a = availabilityFor(occ.id, c.id);
+    groups[a.status].push({c: c, reason: a.reason});
+  });
+
+  var h = '<div class="card sheet-head">'
+    + '<div class="row" style="gap:8px"><span class="pill ' + (occ.type === "match" ? "pill-match" : "pill-training") + '">' + typeLabel(occ.type) + "</span></div>"
+    + '<div class="sheet-title">' + esc(occ.label || typeLabel(occ.type)) + "</div>"
+    + '<div class="muted small">' + fmtDate(occ.date) + (occ.time ? " &middot; " + esc(timeRange(occ)) : "") + "</div>"
+    + "</div>";
+
+  h += '<div class="card" style="padding:13px">'
+    + group("✅ Zugesagt", groups.confirmed, "yes")
+    + group("❌ Abgesagt", groups.declined, "no")
+    + group("⏳ Ausstehend", groups.pending, "wait")
+    + "</div>";
+
+  if (me) {
+    var st = availabilityFor(occ.id, me).status;
+    h += '<div class="eyebrow">Deine Antwort</div><div class="card" style="padding:13px">'
+      + '<div class="avbtns" style="justify-content:center">'
+      + '<button class="yes btn" data-act="quickavail" data-occ="' + esc(occ.id) + '" data-status="confirmed" aria-pressed="' + (st === "confirmed") + '" style="flex:1">✓ Zusagen</button>'
+      + '<button class="no btn" data-act="quickavail" data-occ="' + esc(occ.id) + '" data-status="declined" aria-pressed="' + (st === "declined") + '" style="flex:1">✕ Absagen</button>'
+      + "</div></div>";
+  } else {
+    h += '<div class="banner" style="margin-top:14px">Wähle auf der vorigen Seite aus, wer du bist, um selbst zu antworten.</div>';
+  }
+  return h;
+
+  function group(title, list, cls){
+    var out = '<div class="avgroup"><h3>' + title + " (" + list.length + ")</h3>";
+    if (!list.length) { out += '<p class="avempty">niemand</p></div>'; return out; }
+    out += '<div class="avnames">' + list.map(function(x){
+      return "<span>" + esc(fullName(x.c)) + (x.reason ? ' <span class="why">(' + esc(x.reason) + ")</span>" : "") + "</span>";
+    }).join("") + "</div></div>";
+    return out;
+  }
+}
+
 /* ===================== PIN-Sperre ===================== */
 function storedPin(){ try { return localStorage.getItem("tp.pin") || ""; } catch(e){ return ""; } }
 function pinOf(kind){ return kind === "admin" ? ((DB && DB.settings.adminPin) || "") : PIN; }
@@ -1204,17 +1430,23 @@ function render(){
   if (!UNLOCKED || !DB) { el("root").innerHTML = viewLock("app"); return; }
   var team = DB.settings.team || TITLE;
   var sub = DB.settings.season ? "Saison " + DB.settings.season : "Anwesenheit";
-  var back = (UI.view === "record" || UI.view === "adhoc" || UI.view === "report");
+  var back = (UI.view === "record" || UI.view === "adhoc" || UI.view === "report" || UI.view === "plandetail");
   var body =
-      UI.view === "record" ? viewRecord()
-    : UI.view === "adhoc"  ? viewAdhoc()
-    : UI.view === "report" ? viewReport()
-    : UI.view === "stats"  ? viewStats()
-    : UI.view === "admin"  ? (ADMIN_OK ? viewAdmin() : viewLock("admin"))
+      UI.view === "record"     ? viewRecord()
+    : UI.view === "adhoc"      ? viewAdhoc()
+    : UI.view === "report"     ? viewReport()
+    : UI.view === "stats"      ? viewStats()
+    : UI.view === "planning"   ? viewPlanning()
+    : UI.view === "plandetail" ? viewPlanDetail()
+    : UI.view === "admin"      ? (ADMIN_OK ? viewAdmin() : viewLock("admin"))
     : viewEvents();
 
+  var pending = pendingCountFor(myCoachId());
+  var planBadge = pending > 0 ? '<span class="navbadge">' + (pending > 9 ? "9+" : pending) + "</span>" : "";
   var nav = '<nav class="nav"><div class="nav-in">'
-    + navBtn("events", "Termine", ICON.cal) + navBtn("stats", "Auswertung", ICON.chart) + navBtn("admin", "Admin", ICON.cog)
+    + navBtn("events", "Termine", ICON.cal)
+    + '<button data-act="go" data-view="planning"' + ((UI.view === "planning" || UI.view === "plandetail") ? ' aria-current="page"' : "") + ">" + ICON.plan + planBadge + "<span>Planung</span></button>"
+    + navBtn("stats", "Auswertung", ICON.chart) + navBtn("admin", "Admin", ICON.cog)
     + "</div></nav>";
 
   el("root").innerHTML =
@@ -1225,7 +1457,7 @@ function render(){
     + '<main class="app">' + body + "</main>" + nav;
   window.scrollTo(0, UI.scroll || 0);
   UI.scroll = 0;
-  try { sessionStorage.setItem("tp.ui", JSON.stringify({view:UI.view, occ:UI.occ, statType:UI.statType, statRange:UI.statRange, statSort:UI.statSort, adminTab:UI.adminTab})); } catch(e){}
+  try { sessionStorage.setItem("tp.ui", JSON.stringify({view:UI.view, occ:UI.occ, planOcc:UI.planOcc, myCoach:UI.myCoach, statType:UI.statType, statRange:UI.statRange, statSort:UI.statSort, adminTab:UI.adminTab})); } catch(e){}
 }
 function navBtn(v, label, icon){
   return '<button data-act="go" data-view="' + v + '"' + (UI.view === v || (v === "events" && (UI.view === "record" || UI.view === "adhoc")) || (v === "stats" && UI.view === "report") ? ' aria-current="page"' : "") + ">" + icon + "<span>" + label + "</span></button>";
@@ -1250,6 +1482,20 @@ document.addEventListener("input", function(ev){
     saveDraft(UI.occ, UI.state);
   }
 });
+document.addEventListener("change", function(ev){
+  var t = ev.target;
+  if (t.getAttribute && t.getAttribute("data-act") === "mycoach") {
+    UI.myCoach = t.value || "";
+    setStoredCoach(UI.myCoach);
+    render();
+  }
+});
+document.addEventListener("keydown", function(ev){
+  if (ev.key === "Enter" && el("reasonDlg") && el("reasonDlg").open) {
+    ev.preventDefault();
+    ACT.reasonok();
+  }
+});
 
 function updateSheet(){
   var st = UI.state;
@@ -1270,7 +1516,7 @@ var ACT = {
     if (t.getAttribute("data-tab")) UI.adminTab = t.getAttribute("data-tab");
     go(v);
   },
-  back: function(){ go(UI.view === "report" ? "stats" : "events"); },
+  back: function(){ go(UI.view === "report" ? "stats" : UI.view === "plandetail" ? "planning" : "events"); },
   report: function(){ go("report"); },
   print: function(){ try { window.print(); } catch(e){ toast("Der Browser hat das Drucken blockiert – bitte über das Browsermenü drucken."); } },
   pin: function(t){ addDigit(t.getAttribute("data-d")); },
@@ -1287,6 +1533,32 @@ var ACT = {
     var d = val("a-date"); if (!d) { toast("Bitte ein Datum wählen."); return; }
     UI.adhoc = {id: uid("x"), date: d, time: val("a-time"), timeEnd: val("a-end"), type: val("a-type"), label: val("a-label")};
     UI.occ = UI.adhoc.id; go("record");
+  },
+  planopen: function(t){ UI.planOcc = t.getAttribute("data-occ"); go("plandetail"); },
+  quickavail: function(t){
+    var occId = t.getAttribute("data-occ"), status = t.getAttribute("data-status"), me = myCoachId();
+    if (!me) { toast("Bitte zuerst auswählen, wer du bist."); return; }
+    var current = availabilityFor(occId, me).status;
+    if (status === "confirmed") {
+      commitAvailability(occId, me, current === "confirmed" ? "pending" : "confirmed");
+      return;
+    }
+    // Absagen: bei bereits aktiver Absage per erneutem Klick zuruecksetzen,
+    // sonst Grund erfragen.
+    if (current === "declined") { commitAvailability(occId, me, "pending"); return; }
+    PLAN_DECLINE = {occ: occId, coach: me};
+    var input = el("reasonInput"); if (input) input.value = "";
+    var dlg = el("reasonDlg");
+    if (dlg && dlg.showModal) dlg.showModal();
+  },
+  reasoncancel: function(){ var dlg = el("reasonDlg"); if (dlg) dlg.close(); PLAN_DECLINE = null; },
+  reasonok: function(){
+    var dlg = el("reasonDlg");
+    if (!PLAN_DECLINE) { if (dlg) dlg.close(); return; }
+    var reason = (el("reasonInput") && el("reasonInput").value || "").trim();
+    var p = PLAN_DECLINE; PLAN_DECLINE = null;
+    if (dlg) dlg.close();
+    commitAvailability(p.occ, p.coach, "declined", reason);
   },
   coach: function(t){
     var id = t.getAttribute("data-id"), st = UI.state, i = st.coachIds.indexOf(id);

@@ -42,6 +42,14 @@ statt die Arbeit des anderen zu überschreiben.
   Entwurf auf dem Gerät erhalten
 - Zusätzliche Termine ausserhalb des Plans (Turnier, Zusatztraining) direkt erfassbar
 
+**Trainer-Planung**
+- Trainer sagen für anstehende Termine (bis Saisonende) im Voraus zu oder ab
+- Volle Transparenz: jeder mit App-PIN sieht zu jedem Termin, wer zugesagt,
+  abgesagt (mit Grund) oder noch nicht geantwortet hat
+- Eigene Auswahl («wer bin ich») wird pro Gerät gemerkt
+- Zugesagte Trainer werden beim späteren Erfassen der Anwesenheit automatisch
+  vorausgewählt
+
 **Auswertung**
 - Anwesenheitsquote pro Spieler in Prozent über die ganze Saison
 - Filter nach Training / Wettkampf und nach Zeitraum

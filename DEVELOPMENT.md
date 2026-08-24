@@ -134,7 +134,15 @@ und Server hin- und herwandert und was in `_daten` liegt.
       "note": "",
       "createdAt": "Di 18.08.26 22:51", "createdBy": "Max M., …",
       "updatedAt": "Di 18.08.26 22:51", "updatedBy": "Max M., …" }
-  ]
+  ],
+  "availability": {           // Zu-/Absagen der Trainer (Trainer-Planung)
+    // Schlüssel = dieselbe Termin-ID wie bei records; nur EXPLIZITE Antworten
+    // werden gespeichert - fehlt ein Trainer hier, gilt er als "pending".
+    "r-ab12cd|2026-08-24": {
+      "c1": { "status": "confirmed" },
+      "c4": { "status": "declined", "reason": "Ferien" }
+    }
+  }
 }
 ```
 
@@ -155,6 +163,17 @@ und Server hin- und herwandert und was in `_daten` liegt.
   `playerStats()`; wer die Definition ändert, muss Backend-`renderSheets` und den
   Bericht anpassen.
 - **`type`**: `"training" | "match"`.
+- **`availability`** ist bewusst sparse (kein Eintrag = `pending`), analog zu
+  `entries` bei den Spielern. **Es gibt keine Vorab-Befüllung**: Weder beim
+  Anlegen eines neuen Trainers noch beim Anlegen einer Serie/eines
+  Einzeltermins werden Einträge erzeugt. Das ist eine bewusste Abweichung von
+  einer naheliegenderen "bei jedem neuen Termin alle Trainer mit pending
+  verknüpfen"-Idee: Termine existieren nicht als persistente Objekte (siehe
+  `plannedOccurrences()` weiter unten) – eine Serie ohne Enddatum würde sonst
+  unbegrenzt viele Einträge erzeugen, und jede Änderung an Trainern oder
+  Terminen bräuchte einen Nachtrage-Mechanismus. Ein Eintrag entsteht nur,
+  wenn ein Trainer tatsächlich antwortet; toggelt er zurück auf "pending",
+  wird der Eintrag wieder gelöscht (siehe `commitAvailability()`).
 - **`active: false`** deaktiviert (pausiert) Spieler/Trainer/Serien, ohne
   Historie zu verlieren. Löschen entfernt zusätzlich Verweise in `records`.
 - **Zeiten**: `time`/`timeEnd` als `"HH:MM"`; leer erlaubt (z. B. Hallenturnier
@@ -238,6 +257,18 @@ zentralen Delegat-Handler auf `data-act`-Attribute (`ACT`-Objekt).
    an, `render()` (optimistisch), `apiSave`. Bei `conflict`/Fehler Rollback.
 3. `refresh()` beim Zurückkehren in die App (visibilitychange) lädt neu, wenn
    sich `rev` geändert hat.
+4. `commitAvailability(occId, coachId, status, reason)` ist eine bewusste
+   Ausnahme neben `commit()`: sie nutzt denselben Speicherweg (volle
+   State-Speicherung, `rev`-gated), wiederholt bei `conflict` aber **einmal
+   automatisch** auf dem frischen Stand, statt den Nutzer erneut klicken zu
+   lassen. Das ist hier sicher, weil eine Zu-/Absage nur eine einzelne, von
+   allem anderen unabhängige Stelle im Zustand verändert. `commit()` selbst
+   bleibt bewusst OHNE Auto-Retry: Für z. B. einen Freitext-Kommentar wäre
+   ein blindes Wiederholen riskant (zwei Personen könnten dieselbe Stelle
+   unterschiedlich geändert haben). Neue Funktionen mit demselben
+   "viele kleine, unabhängige Klicks"-Charakter wie die Trainer-Planung
+   sollten `commitAvailability()` als Vorlage nehmen statt `commit()`
+   anzufassen.
 
 **Schichten der Funktionen** (Auswahl, alle in `index.html`)
 
