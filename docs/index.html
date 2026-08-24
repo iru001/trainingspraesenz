@@ -74,8 +74,10 @@ button{cursor:pointer}
 }
 .topbar-in{max-width:900px;margin:0 auto;display:flex;align-items:center;gap:12px;min-height:34px}
 .brand{display:flex;flex-direction:column;gap:1px;min-width:0;flex:1}
-.brand b{font-family:Oswald,sans-serif;font-weight:600;font-size:18px;line-height:1.15;text-transform:uppercase;letter-spacing:.04em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.brand b{font-family:Oswald,sans-serif;font-weight:600;font-size:18px;line-height:1.15;text-transform:uppercase;letter-spacing:.04em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:flex;align-items:center;gap:5px}
 .brand span{font-size:12px;color:var(--ink-3);letter-spacing:.06em;text-transform:uppercase}
+.brand-btn{background:none;border:0;padding:0;text-align:left;color:inherit;font:inherit;cursor:pointer}
+.brand-caret{flex:0 0 auto;color:var(--ink-3)}
 .back{
   display:inline-flex;align-items:center;gap:6px;background:none;border:0;padding:6px 8px 6px 0;
   color:var(--accent);font-weight:600;font-size:15px;
@@ -1507,10 +1509,14 @@ function render(){
     + navBtn("stats", "Auswertung", ICON.chart) + navBtn("admin", "Admin", ICON.cog)
     + "</div></nav>";
 
+  var brandName = "<span>" + esc(team) + "</span>" + (TEAMS.length > 1 ? '<svg class="brand-caret" viewBox="0 0 24 24" width="14" height="14"><path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>' : "");
+  var brand = TEAMS.length > 1
+    ? '<button class="brand brand-btn" data-act="lock" aria-label="Team wechseln"><b>' + brandName + "</b><span>" + esc(sub) + "</span></button>"
+    : '<span class="brand"><b>' + brandName + "</b><span>" + esc(sub) + "</span></span>";
   el("root").innerHTML =
       '<header class="topbar"><div class="topbar-in">'
     + (back ? '<button class="back" data-act="back">' + ICON.arrow + "Zurück</button>" : "")
-    + '<span class="brand"><b>' + esc(team) + "</b><span>" + esc(sub) + "</span></span>"
+    + brand
     + "</div></header>"
     + '<main class="app">' + body + "</main>" + nav;
   window.scrollTo(0, UI.scroll || 0);
