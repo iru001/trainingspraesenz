@@ -34,6 +34,15 @@ die App legt die Blätter selbst an.
    Nimm für den App-PIN **mindestens sechs Ziffern**. Die Adresse der App ist
    öffentlich, der PIN ist der einzige Zugangsschutz. Ändern lassen sich beide
    später in der App unter *Admin → Team*.
+
+   > **Wichtig:** `ERSTER_PIN`/`ERSTER_ADMIN_PIN` wirken nur **ein einziges
+   > Mal** – beim allerersten Aufruf, den das Skript jemals verarbeitet (auch
+   > ein einfaches Öffnen der Web-App-Adresse im Browser zählt). Danach liegt
+   > der PIN in den Skript-Eigenschaften und wird **nicht** mehr aus dem Code
+   > übernommen, egal wie oft du `ERSTER_PIN` änderst und neu bereitstellst.
+   > Trag die PIN deshalb **hier ein, bevor** du in Schritt 3 zum ersten Mal
+   > bereitstellst und die Adresse öffnest. Hast du das verpasst: Siehe
+   > Tabelle unten, „`ERSTER_PIN` geändert, wirkt aber nicht mehr“.
 5. Oben auf das **Disketten-Symbol** (Speichern) klicken.
 
 ## Schritt 3 – Als Web-App bereitstellen
@@ -189,4 +198,5 @@ Weil die Adresse öffentlich ist, gilt:
 | «Server hat mit Fehler 401/403 geantwortet» | In Schritt 3 wurde beim Zugriff nicht **Jeder** gewählt. Bereitstellung bearbeiten und korrigieren. |
 | «Keine Verbindung zum Server» | Internetverbindung prüfen. Bleibt es dabei: Skript-Adresse im Browser öffnen – es muss die Meldung «Backend läuft» erscheinen. |
 | «Falscher PIN», obwohl er stimmt | Nach einer PIN-Änderung gilt der neue PIN sofort auf allen Geräten. |
+| `ERSTER_PIN` geändert, wirkt aber nicht mehr | `ERSTER_PIN`/`ERSTER_ADMIN_PIN` wirken nur beim allerersten Aufruf des Skripts – danach steht der PIN in den Skript-Eigenschaften und wird nicht mehr aus dem Code übernommen, auch nicht nach einer neuen Bereitstellung. Fix: **Apps Script → Zahnrad (Projekteinstellungen) → Skripteigenschaften** – `APP_PIN` und `ADMIN_PIN` löschen. Beim nächsten Aufruf wird der PIN wieder aus `ERSTER_PIN` übernommen (keine neue Bereitstellung nötig). |
 | Änderungen am Skript wirken nicht | Neue Version bereitstellen (siehe Hinweis in Schritt 3). |
