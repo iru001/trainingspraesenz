@@ -217,12 +217,32 @@ und Server hin- und herwandert und was in `_daten` liegt.
   eigene ID direkt. Ein `record.id` **ist** die Termin-ID – dadurch ist jede
   Erfassung eindeutig einem Termin zugeordnet und mehrfaches Speichern
   aktualisiert denselben Datensatz statt Duplikate zu erzeugen.
-- **Status-Werte** in `entries`: genau `"present" | "late" | "excused" | "absent"`
-  (UI-Kürzel A/V/E/F). Ein Spieler ohne Eintrag zählt für diesen Termin **nicht**
-  in die Statistik.
-- **Quote** = (`present` + `late`) / Anzahl Termine mit Eintrag. Zentral in
-  `playerStats()`; wer die Definition ändert, muss Backend-`renderSheets` und den
-  Bericht anpassen.
+- **Status-Werte** in `entries`: `"present" | "late" | "excused" | "absent"`
+  (UI-Kürzel A/V/E/F) sowie zusätzlich `"na"` (**N**icht im **A**ufgebot,
+  UI-Kürzel „NA"), das aber **kein** fünfter gleichwertiger Status ist – siehe
+  eigener Punkt unten. Ein Spieler ohne Eintrag zählt für diesen Termin
+  **nicht** in die Statistik.
+- **Quote** = (`present` + `late`) / Anzahl Termine mit Eintrag (`"na"` zählt
+  dabei wie "kein Eintrag" NICHT mit, siehe unten). Zentral in `playerStats()`;
+  wer die Definition ändert, muss Backend-`renderSheets` und den Bericht
+  anpassen.
+- **`"na"` (Nicht im Aufgebot)**: nur bei `type === "match"` wählbar (Button
+  erscheint in `viewRecord()` nur dort, `.seg.seg-5` statt `.seg` für die
+  fünfte Spalte). Bewusst **kein** Eintrag in `STATUS`/`SK` – dort würde er
+  automatisch in jede Quote-Leiste, jede A/V/E/F-Spalte im Bericht und jede
+  Auswertungsspalte einfließen, obwohl er ausdrücklich neutral/informativ
+  bleiben soll ("nicht negativ, nur Info"). Stattdessen:
+  - `playerStats()`/Backend-`renderSheets()` zählen ihn implizit nicht mit,
+    weil ihre Zähler-Objekte keinen `na`-Schlüssel haben (derselbe Mechanismus
+    wie bei einem fehlenden Eintrag).
+  - `abFor(status)` ist die sichere Lookup-Funktion für Matrix-Zellen
+    (Frontend `exportCsv()`/`viewReport()`) – `SK[st].ab` direkt aufzurufen
+    würde bei `"na"` abstürzen, da `SK` keinen `na`-Eintrag hat.
+  - Backend-`ST`-Map (`apps-script/Code.gs`) hat `na: 'NA'` ergänzt, damit die
+    Matrix-Tabellenblatt-Zelle „NA" statt leer zeigt.
+  - `tallyHtml()` zählt `"na"` separat in `counts.na` und zeigt bei `> 0` eine
+    eigene Pille „Nicht im Aufgebot"; es zählt zum "Eintrag vorhanden"-Zähler
+    `set`, damit der Trainer nicht dauerhaft zum Nachtragen aufgefordert wird.
 - **`type`**: `"training" | "match"`.
 - **`rules[].duringHolidays`**: steuert, ob eine wöchentliche Serie auch während
   der Schulferien Termine erzeugt. Standard/fehlendes Feld = `false` (Ferien
@@ -337,24 +357,37 @@ zentralen Delegat-Handler auf `data-act`-Attribute (`ACT`-Objekt).
 3. `refresh()` beim Zurückkehren in die App (visibilitychange) lädt neu, wenn
    sich `rev` geändert hat.
 4. `commitAvailability(occId, coachId, status, reason)` ist eine bewusste
-   Ausnahme neben `commit()`: sie nutzt denselben Speicherweg (volle
-   State-Speicherung, `rev`-gated), wiederholt bei `conflict` aber **einmal
-   automatisch** auf dem frischen Stand, statt den Nutzer erneut klicken zu
-   lassen. Das ist hier sicher, weil eine Zu-/Absage nur eine einzelne, von
-   allem anderen unabhängige Stelle im Zustand verändert. `commit()` selbst
-   bleibt bewusst OHNE Auto-Retry: Für z. B. einen Freitext-Kommentar wäre
-   ein blindes Wiederholen riskant (zwei Personen könnten dieselbe Stelle
-   unterschiedlich geändert haben). Neue Funktionen mit demselben
-   "viele kleine, unabhängige Klicks"-Charakter wie die Trainer-Planung
-   sollten `commitAvailability()` als Vorlage nehmen statt `commit()`
-   anzufassen.
+   Ausnahme neben `commit()`, aus zwei Gründen NICHT blockierend:
+   - Anders als `commit()` wartet sie **nie** auf eine laufende Speicherung
+     (kein `if (BUSY) return`). Jeder Tipp wendet die Änderung sofort lokal
+     an (`applyAvailOp`) und rendert – das eigentliche Speichern läuft über
+     eine Warteschlange (`AVAIL_PENDING`/`AVAIL_SAVING`/
+     `runAvailabilitySaveLoop()`) im Hintergrund. Schnell aufeinanderfolgende
+     Tipps (z. B. beim zügigen Durchgehen vieler Termine in der Planung)
+     landen dadurch automatisch gebündelt in weniger Serveraufrufen, statt
+     dass jeder einzelne Tipp auf die volle Serverantwort warten müsste.
+   - Bei `conflict` werden alle noch offenen (`AVAIL_PENDING`) Änderungen auf
+     dem frischen Server-Stand erneut angewendet, bevor weitergespeichert
+     wird – die Schleife läuft weiter, bis die Warteschlange leer ist.
+   Das ist hier sicher, weil jede Zu-/Absage nur eine einzelne, von allem
+   anderen unabhängige Stelle im Zustand verändert (anders als z. B. ein
+   Freitext-Kommentar, wo blindes Wiederholen riskant wäre, weil zwei
+   Personen dieselbe Stelle unterschiedlich geändert haben könnten – deshalb
+   bleibt `commit()` bewusst blockierend und ohne Auto-Retry). Neue
+   Funktionen mit demselben "viele kleine, unabhängige Klicks, zügig
+   nacheinander"-Charakter wie die Trainer-Planung sollten
+   `commitAvailability()`/`runAvailabilitySaveLoop()` als Vorlage nehmen
+   statt `commit()` anzufassen.
 
 **Schichten der Funktionen** (Auswahl, alle in `index.html`)
 
 - Server/IO: `apiCall`, `apiLoad`, `apiSave`, `boot`, `refresh`, `commit`,
   `download`, `failText`, `normalize`.
 - Domänenlogik: `plannedOccurrences` (erzeugt Termine aus Serien+Einzelterminen
-  für einen Zeitraum), `findOccurrence`, `statRecords`, `playerStats`.
+  für einen Zeitraum), `findOccurrence`, `statRecords`, `playerStats`,
+  `coachStats` (Trainer-Anwesenheitsquote für die Spesenabrechnung – Anteil
+  der Termine im gewählten Zeitraum, bei denen der Trainer in `coachIds`
+  steht; verwendet in `viewStats`, `viewReport`, `exportCsv`).
 - Ansichten (liefern HTML-Strings): `viewEvents`, `viewRecord`, `viewStats`,
   `viewReport`, `viewAdmin`, `viewAdhoc`, `viewLock`.
 - Aktionen: das `ACT`-Objekt bündelt alle `data-act`-Handler.

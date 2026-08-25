@@ -41,6 +41,8 @@ statt die Arbeit des anderen zu überschreiben.
 - Termine erscheinen als Liste: heute & demnächst, nachzutragen, bereits erfasst
 - Pro Termin wird festgehalten, **welche Trainer anwesend sind**
 - Vier Zustände pro Spieler: Anwesend (A), Verspätet (V), Entschuldigt (E), Fehlt (F)
+- Bei Wettkämpfen zusätzlich «Nicht im Aufgebot» (NA) – rein informativ, wirkt
+  sich nicht auf die Anwesenheitsquote aus
 - «Alle anwesend» als Startpunkt, danach nur noch die Abweichungen antippen
 - Erfassung wird mit **Anwesenheit abschliessen** bestätigt und gespeichert
 - Nachträgliches Bearbeiten jederzeit möglich; unbestätigte Eingaben bleiben als
@@ -61,9 +63,12 @@ statt die Arbeit des anderen zu überschreiben.
 
 **Auswertung**
 - Anwesenheitsquote pro Spieler in Prozent über die ganze Saison
+- Anwesenheitsquote pro Trainer (Einsätze / erfasste Termine) – nutzbar für
+  die Spesenabrechnung
 - Filter nach Training / Wettkampf und nach Zeitraum
-- Gesamtquote, Anzahl erfasster Einheiten, Trainereinsätze, Liste aller Termine
-- CSV-Export (Spielerübersicht, Terminliste und Matrix Spieler × Termin)
+- Gesamtquote, Anzahl erfasster Einheiten, Liste aller Termine
+- CSV-Export (Spielerübersicht, Trainerübersicht, Terminliste und Matrix
+  Spieler × Termin)
 
 **Bericht & Export**
 - Druckansicht mit Kopfzeile, Überblick, Spielertabelle, Terminliste und

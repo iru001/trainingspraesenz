@@ -215,6 +215,7 @@ input::placeholder,textarea::placeholder{color:var(--ink-3)}
 .pname b{font-weight:700}
 .pname small{display:block;font-size:12px;color:var(--ink-3)}
 .seg{display:grid;grid-template-columns:repeat(4,38px);gap:4px;flex:none}
+.seg.seg-5{grid-template-columns:repeat(5,38px)}
 .seg button{
   height:40px;border-radius:9px;border:1px solid var(--line-2);background:var(--surface-2);
   color:var(--ink-3);font-family:Oswald,sans-serif;font-size:15px;font-weight:600;padding:0;
@@ -224,6 +225,8 @@ input::placeholder,textarea::placeholder{color:var(--ink-3)}
 .seg button.s-late[aria-pressed="true"]{background:var(--info);border-color:var(--info);color:#fff}
 .seg button.s-excused[aria-pressed="true"]{background:var(--warn);border-color:var(--warn);color:#fff}
 .seg button.s-absent[aria-pressed="true"]{background:var(--bad);border-color:var(--bad);color:#fff}
+.seg button.s-na{font-size:12px}
+.seg button.s-na[aria-pressed="true"]{background:var(--ink-3);border-color:var(--ink-3);color:var(--surface)}
 :root[data-theme="dark"] .seg button[aria-pressed="true"],
 :root:not([data-theme="light"]) .seg button.s-late[aria-pressed="true"]{color:var(--on-accent)}
 @media (prefers-color-scheme:dark){
@@ -348,7 +351,7 @@ table.grid td.num{text-align:right;font-variant-numeric:tabular-nums}
 .report .rep-head b{font-family:Oswald,sans-serif;font-size:23px;font-weight:600;display:block}
 .report .rep-head span{font-size:13px;color:var(--ink-2)}
 .report table.grid td.mx{text-align:center;font-weight:700;padding:5px 6px}
-.mx-present{color:var(--accent)} .mx-late{color:var(--info)} .mx-excused{color:var(--warn)} .mx-absent{color:var(--bad)}
+.mx-present{color:var(--accent)} .mx-late{color:var(--info)} .mx-excused{color:var(--warn)} .mx-absent{color:var(--bad)} .mx-na{color:var(--ink-3)}
 @media print{
   :root, :root[data-theme="dark"], :root:not([data-theme="light"]){
     --bg:#fff; --surface:#fff; --surface-2:#f4f4f4; --surface-3:#e8e8e8;
@@ -400,6 +403,10 @@ var STATUS = [
   {k:"absent",  ab:"F", label:"Fehlt",         cls:"s-absent",  color:"var(--bad)"}
 ];
 var SK = {}; STATUS.forEach(function(s){ SK[s.k] = s; });
+// "na" (Nicht im Aufgebot) ist bewusst NICHT Teil von STATUS/SK: es zaehlt nirgends
+// in die Anwesenheitsquote hinein (siehe playerStats()), taucht aber in Matrix-
+// Zellen als eigene Kuerzel auf - abFor() deckt beide Faelle sicher ab.
+function abFor(st){ return st === "na" ? "NA" : (SK[st] ? SK[st].ab : ""); }
 var ICON = {
   cal:'<svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>',
   chart:'<svg viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>',
@@ -926,15 +933,18 @@ function viewRecord(){
     h += '<div class="card"><ul class="plist">' + players.map(function(p){
       return '<li data-player="' + p.id + '"><span class="pname"><b>' + esc(p.first) + "</b> " + esc(p.last)
         + (p.active === false ? ' <small>nicht mehr im Kader</small>' : "") + "</span>"
-        + '<span class="seg">' + STATUS.map(function(s){
+        + '<span class="seg' + (occ.type === "match" ? " seg-5" : "") + '">' + STATUS.map(function(s){
             var on = state.entries[p.id] === s.k;
             return '<button class="' + s.cls + '" data-act="mark" data-player="' + p.id + '" data-status="' + s.k + '" '
               + 'aria-pressed="' + on + '" aria-label="' + s.label + " – " + esc(fullName(p)) + '" title="' + s.label + '">' + s.ab + "</button>";
-          }).join("") + "</span></li>";
+          }).join("")
+          + (occ.type === "match" ? '<button class="s-na" data-act="mark" data-player="' + p.id + '" data-status="na" '
+              + 'aria-pressed="' + (state.entries[p.id] === "na") + '" aria-label="Nicht im Aufgebot – ' + esc(fullName(p)) + '" title="Nicht im Aufgebot">NA</button>' : "")
+          + "</span></li>";
     }).join("") + "</ul></div>";
     h += '<div class="legend" style="margin-top:8px">' + STATUS.map(function(s){
       return '<span><i style="background:' + s.color + '"></i>' + s.ab + " &middot; " + s.label + "</span>";
-    }).join("") + "</div>";
+    }).join("") + (occ.type === "match" ? '<span><i style="background:var(--ink-3)"></i>NA &middot; Nicht im Aufgebot</span>' : "") + "</div>";
   }
 
   h += '<div class="eyebrow">Notiz (optional)</div>'
@@ -959,13 +969,13 @@ function viewRecord(){
 }
 
 function tallyHtml(state, total){
-  var counts = {present:0, late:0, excused:0, absent:0}, set = 0;
+  var counts = {present:0, late:0, excused:0, absent:0, na:0}, set = 0;
   for (var k in state.entries) { if (counts[state.entries[k]] !== undefined) { counts[state.entries[k]]++; set++; } }
   var here = counts.present + counts.late;
   return '<div class="row" style="justify-content:space-between;gap:10px;flex-wrap:wrap">'
     + '<span class="tally">' + STATUS.map(function(s){
         return '<span class="pill" style="background:var(--surface-2);color:var(--ink-2)"><i style="width:9px;height:9px;border-radius:3px;display:inline-block;background:' + s.color + '"></i>' + s.label + ' <b>' + counts[s.k] + "</b></span>";
-      }).join("") + "</span>"
+      }).join("") + (counts.na ? '<span class="pill" style="background:var(--surface-2);color:var(--ink-2)"><i style="width:9px;height:9px;border-radius:3px;display:inline-block;background:var(--ink-3)"></i>Nicht im Aufgebot <b>' + counts.na + "</b></span>" : "") + "</span>"
     + '<span class="disp tnum" style="font-size:20px">' + here + "/" + total + " anwesend</span></div>"
     + (set < total ? '<p class="small muted" style="margin:8px 0 0">' + (total - set) + " Spieler noch ohne Eintrag – ohne Eintrag zählt der Spieler für diesen Termin nicht in die Statistik.</p>" : "");
 }
@@ -999,6 +1009,14 @@ function playerStats(recs){
   var arr = [];
   for (var k in map) { var s = map[k]; s.here = s.present + s.late; s.quote = pct(s.here, s.total); arr.push(s); }
   return arr;
+}
+// Anwesenheit pro Trainer (fuer Spesenabrechnung): Anteil der erfassten
+// Termine im gewaehlten Zeitraum, bei denen der Trainer in coachIds steht.
+function coachStats(recs){
+  return activeCoaches().map(function(c){
+    var n = recs.filter(function(r){ return (r.coachIds || []).indexOf(c.id) >= 0; }).length;
+    return {c: c, n: n, total: recs.length, quote: pct(n, recs.length)};
+  }).sort(function(a, b){ return b.n - a.n; });
 }
 
 function viewStats(){
@@ -1048,14 +1066,14 @@ function viewStats(){
     }).join("") + '<span class="muted">Quote = (Anwesend + Verspätet) / erfasste Termine</span></div>';
   }
 
-  var cstats = activeCoaches().map(function(c){
-    return {c:c, n: recs.filter(function(r){ return (r.coachIds || []).indexOf(c.id) >= 0; }).length};
-  }).sort(function(a,b){ return b.n - a.n; });
+  var cstats = coachStats(recs);
   if (cstats.length) {
-    h += '<div class="eyebrow">Trainereinsätze</div><div class="card">' + cstats.map(function(s){
+    h += '<div class="eyebrow">Anwesenheit pro Trainer<span class="muted small" style="text-transform:none;letter-spacing:0;font-weight:400"> &middot; für Spesenabrechnung</span></div><div class="card">'
+      + cstats.map(function(s){
       return '<div class="item"><span class="grow"><b>' + esc(fullName(s.c)) + "</b>"
-        + (s.c.role ? ' <span class="muted small">' + esc(s.c.role) + "</span>" : "") + "</span>"
-        + '<span class="disp tnum" style="font-size:18px">' + s.n + "</span></div>";
+        + (s.c.role ? ' <span class="muted small">' + esc(s.c.role) + "</span>" : "") + "<br>"
+        + '<span class="small muted">' + s.n + " von " + s.total + " Terminen</span></span>"
+        + '<span class="disp tnum" style="font-size:18px">' + s.quote + "%</span></div>";
     }).join("") + "</div>";
   }
 
@@ -1098,6 +1116,12 @@ function exportCsv(){
     lines.push([s.p.first, s.p.last, s.quote, s.present, s.late, s.excused, s.absent, s.total].map(q).join(sep));
   });
   lines.push("");
+  lines.push(["Trainer (Spesenabrechnung)"].map(q).join(sep));
+  lines.push(["Vorname","Nachname","Einsätze","Erfasste Termine","Quote %"].map(q).join(sep));
+  coachStats(recs).forEach(function(s){
+    lines.push([s.c.first, s.c.last, s.n, s.total, s.quote].map(q).join(sep));
+  });
+  lines.push("");
   lines.push(["Datum","Wochentag","Uhrzeit","Art","Bezeichnung","Trainer","Anwesend","Erfasst","Notiz"].map(q).join(sep));
   recs.forEach(function(r){
     var here = 0, tot = 0;
@@ -1106,11 +1130,11 @@ function exportCsv(){
     lines.push([r.date, DOW[dowOf(r.date)], r.time || "", typeLabel(r.type), r.label || "", cn, here, tot, r.note || ""].map(q).join(sep));
   });
   lines.push("");
-  lines.push(["Matrix: Spieler x Termin (A=Anwesend, V=Verspätet, E=Entschuldigt, F=Fehlt)"].map(q).join(sep));
+  lines.push(["Matrix: Spieler x Termin (A=Anwesend, V=Verspätet, E=Entschuldigt, F=Fehlt, NA=Nicht im Aufgebot bei Wettkämpfen)"].map(q).join(sep));
   lines.push(["Vorname","Nachname"].concat(recs.map(function(r){ return fmtShort(r.date) + " " + (r.type === "match" ? "W" : "T"); })).map(q).join(sep));
   stats.forEach(function(s){
     lines.push([s.p.first, s.p.last].concat(recs.map(function(r){
-      var st = r.entries[s.p.id]; return st ? SK[st].ab : "";
+      var st = r.entries[s.p.id]; return st ? abFor(st) : "";
     })).map(q).join(sep));
   });
   var csv = "﻿" + lines.join(nl);
@@ -1487,6 +1511,17 @@ function viewReport(){
           + x.absent + '</td><td class="num">' + x.total + '</td><td class="num"><b>' + x.quote + "%</b></td></tr>";
       }).join("") + "</tbody></table></div>";
 
+  var cstats = coachStats(recs);
+  if (cstats.length) {
+    h += "<h2>Anwesenheit pro Trainer (Spesenabrechnung)</h2>"
+      + '<div class="tblwrap"><table class="grid" style="width:auto;min-width:min(100%,420px)"><thead><tr><th>Vorname</th><th>Nachname</th>'
+      + '<th class="num">Einsätze</th><th class="num">Termine</th><th class="num">Quote</th></tr></thead><tbody>'
+      + cstats.map(function(s){
+          return "<tr><td>" + esc(s.c.first) + "</td><td>" + esc(s.c.last) + '</td><td class="num">'
+            + s.n + '</td><td class="num">' + s.total + '</td><td class="num"><b>' + s.quote + "%</b></td></tr>";
+        }).join("") + "</tbody></table></div>";
+  }
+
   h += "<h2>Termine</h2>"
     + '<div class="tblwrap"><table class="grid"><thead><tr><th>Datum</th><th>Tag</th><th>Zeit</th><th>Art</th><th>Bezeichnung</th><th>Trainer</th><th class="num">Anwesend</th><th class="num">Quote</th></tr></thead><tbody>'
     + recs.map(function(r){
@@ -1507,15 +1542,16 @@ function viewReport(){
           return "<tr><td>" + esc(x.p.first) + " " + esc(x.p.last) + "</td>"
             + recs.map(function(r){
                 var st = r.entries[x.p.id];
-                return '<td class="mx ' + (st ? "mx-" + st : "") + '">' + (st ? SK[st].ab : "·") + "</td>";
+                return '<td class="mx ' + (st ? "mx-" + st : "") + '">' + (st ? abFor(st) : "·") + "</td>";
               }).join("") + '<td class="num"><b>' + x.quote + "%</b></td></tr>";
         }).join("") + "</tbody></table></div>";
   } else if (recs.length > 40) {
     h += '<p class="small muted">Die Anwesenheitsmatrix wird ab 40 Terminen nicht mehr gedruckt – für die vollständigen Einzeldaten den CSV-Export verwenden.</p>';
   }
 
-  h += '<p class="small muted" style="margin-top:14px">A = anwesend &middot; V = verspätet &middot; E = entschuldigt &middot; F = fehlt &middot; T = Training &middot; W = Wettkampf<br>'
-    + "Quote = (anwesend + verspätet) / erfasste Termine des Spielers.</p></div>";
+  h += '<p class="small muted" style="margin-top:14px">A = anwesend &middot; V = verspätet &middot; E = entschuldigt &middot; F = fehlt &middot; NA = nicht im Aufgebot (nur Wettkämpfe) &middot; T = Training &middot; W = Wettkampf<br>'
+    + "Quote (Spieler) = (anwesend + verspätet) / erfasste Termine des Spielers.<br>"
+    + "Quote (Trainer) = Anzahl geleiteter Termine / erfasste Termine im gewählten Zeitraum.</p></div>";
   return h;
 }
 

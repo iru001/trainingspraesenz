@@ -215,7 +215,7 @@ function writeState(state) {
 /* ============================ Lesbare Blätter ============================ */
 
 var DOW = ['Sonntag', 'Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag'];
-var ST = { present: 'A', late: 'V', excused: 'E', absent: 'F' };
+var ST = { present: 'A', late: 'V', excused: 'E', absent: 'F', na: 'NA' };
 
 function sheetNamed(name) {
   var sh = book().getSheetByName(name);
@@ -321,13 +321,15 @@ function renderSheets(state) {
 
   // --- Trainer ---
   sh = sheetNamed('Trainer');
-  rows = [['Nachname', 'Vorname', 'Funktion', 'Status', 'Einsätze']];
+  rows = [['Nachname', 'Vorname', 'Funktion', 'Status', 'Einsätze', 'Erfasste Termine', 'Quote']];
   state.coaches.slice().sort(byLast).forEach(function (c) {
     var n = 0;
     recs.forEach(function (r) { if ((r.coachIds || []).indexOf(c.id) >= 0) n++; });
-    rows.push([c.last || '', c.first || '', c.role || '', c.active === false ? 'inaktiv' : 'aktiv', n]);
+    rows.push([c.last || '', c.first || '', c.role || '', c.active === false ? 'inaktiv' : 'aktiv', n, recs.length,
+      recs.length ? n / recs.length : '']);
   });
   put(sh, rows);
+  if (state.coaches.length) sh.getRange(2, 7, state.coaches.length, 1).setNumberFormat('0%');
 
   // --- Trainer-Planung (Zu-/Absagen) ---
   // Zeigt nur Termine, zu denen mindestens eine Antwort vorliegt (Object.keys
@@ -420,9 +422,11 @@ function renderSheets(state) {
     ['V', 'verspätet'],
     ['E', 'entschuldigt'],
     ['F', 'fehlt'],
+    ['NA', 'nicht im Aufgebot (nur bei Wettkämpfen) - zählt nicht in die Quote hinein, reine Information'],
     ['(W)', 'Wettkampf statt Training'],
     ['', ''],
-    ['Quote', '(anwesend + verspätet) geteilt durch die erfassten Termine des Spielers'],
+    ['Quote (Kader)', '(anwesend + verspätet) geteilt durch die erfassten Termine des Spielers'],
+    ['Quote (Trainer)', 'Einsätze geteilt durch alle erfassten Termine - Blatt "Trainer", für die Spesenabrechnung'],
     ['', ''],
     ['Trainerplanung', 'zeigt nur Termine, zu denen mindestens ein Trainer bereits zu- oder abgesagt hat'],
     ['Achtung', 'Diese Blätter werden bei jeder Speicherung in der App neu geschrieben. Eigene Eingaben hier gehen verloren.']
