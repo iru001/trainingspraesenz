@@ -114,14 +114,18 @@ im Frontend.
 window.TP_CONFIG = {
   teams: [
     { id: "fa2018", name: "FA 2018", apiUrl: "https://script.google.com/.../exec" },
-    { id: "db",     name: "Db",      apiUrl: "https://script.google.com/.../exec" }
+    { id: "db",     name: "Db",      apiUrl: "https://script.google.com/.../exec",
+      logo: "data:image/png;base64,…" }   // optional, siehe Abschnitt 4a
   ]
 };
 ```
 `id` ist ein fester, kurzer Code (keine Sonderzeichen) – er ist Teil von
 `localStorage`-Schlüsseln und darf sich nach dem Ausrollen nicht mehr ändern,
 sonst "vergisst" jedes Gerät seinen gemerkten PIN für dieses Team. Ist nur ein
-Team konfiguriert, wird die Team-Auswahl automatisch übersprungen.
+Team konfiguriert, wird die Team-Auswahl automatisch übersprungen. `logo` ist
+optional und erscheint nur auf dem Aufgebot (Abschnitt 4a) – bewusst hier statt
+im Datenbestand, da es sich praktisch nie ändert und sonst bei jeder Anfrage
+mitübertragen würde.
 
 **Ablauf im Frontend:** `TEAM` (gewähltes Team-Objekt) ist ein zusätzlicher
 globaler Zustand VOR `DB`. Ist `TEAM` noch `null`, zeigt `render()` den
@@ -168,7 +172,9 @@ und Server hin- und herwandert und was in `_daten` liegt.
     "seasonStart": "2026-08-01",   // ISO-Datum (YYYY-MM-DD)
     "seasonEnd":   "2027-06-30",
     "pin": "••••••",         // NUR client-/transportseitig; im Blatt immer ""
-    "adminPin": "••••"       //   (Quelle der Wahrheit: Skript-Eigenschaften)
+    "adminPin": "••••",      //   (Quelle der Wahrheit: Skript-Eigenschaften)
+    "callupNotes": "",       // Aufgebot: Text unter "Mitnehmen", leer = Standardtext
+    "callupCancelHint": ""   // Aufgebot: Text unter "Abmeldungen/Verspätungen", leer = Standardtext
   },
   "coaches": [
     { "id": "c1", "first": "Max", "last": "M.", "role": "Trainer", "active": true }
@@ -182,9 +188,11 @@ und Server hin- und herwandert und was in `_daten` liegt.
       "from": "2026-08-18", "to": "2027-06-30", "active": true,
       "duringHolidays": false }   // optional, fehlt = false, siehe unten
   ],
-  "singles": [               // Einzeltermine (z. B. Turniere)
+  "singles": [               // Einzeltermine (z. B. Turniere, Meisterschaftsspiele)
     { "id": "s1", "type": "match", "date": "2026-08-22", "time": "12:00",
-      "timeEnd": "16:00", "label": "PMF-Turnier …" }
+      "timeEnd": "16:00", "label": "PMF-Turnier …",
+      "opponent": "FC Muster c", "homeAway": "away",       // nur bei type "match" genutzt
+      "venueAddress": "Sportanlage Buhwil, Effretikon" }   // siehe Aufgebot, Abschnitt 4a
   ],
   "records": [               // abgeschlossene Erfassungen
     { "id": "r-ab12cd|2026-08-18",   // = Termin-ID (siehe unten)
@@ -203,7 +211,16 @@ und Server hin- und herwandert und was in `_daten` liegt.
       "c1": { "status": "confirmed" },
       "c4": { "status": "declined", "reason": "Ferien" }
     }
-  }
+  },
+  "venues": [                 // Fahrzeit ab Bülach, einmalig pro Sportplatz-Adresse
+    { "address": "Sportanlage Buhwil, Effretikon", "travelMinutes": 25 }
+  ],
+  "callups": [                 // Aufgebote, siehe Abschnitt 4a
+    { "id": "cu-ab12cd", "matchId": "s1",
+      "meetTime": "08:35", "meetPlace": "Militärparkplatz Bülach", "travelMinutes": 25,
+      "coachIds": ["c1", "c4"], "playerIds": ["p1", "p2", "…"], "keeperId": "p1",
+      "guests": [{ "name": "Arel", "team": "D9c" }] }
+  ]
 }
 ```
 
@@ -282,6 +299,47 @@ Beim Laden läuft der Zustand durch `normalize()` (fehlende Felder/Arrays
 ergänzen). **Migrationsregel-Beispiel**: `normalize` entfernt ein evtl.
 vorhandenes `player.birth` – so wurde das nachträgliche Streichen der
 Geburtsdaten idempotent gemacht. Neue Migrationen gehören ebenfalls hierhin.
+
+---
+
+## 4a. Aufgebot
+
+Admin-Funktion, mit der ein Trainer für einen Wettkampftag ein druckbares
+Spielaufgebot erstellt (Treffpunkt, Trainer, bis zu 14 Spieler) – Ersatz für das
+bisher manuell in Word gepflegte Dokument.
+
+- **Ablauf**: `adminCallups()` listet alle `singles` mit `type === "match"`;
+  Antippen öffnet `viewCallupWizard()` mit `UI.callup` (Entwurf, nur im
+  Speicher, nicht Teil von `DB`) für genau drei Schritte – Treffpunkt, Trainer,
+  Spieler. `ACT.cwsave` schreibt Entwurf → `DB.singles[].{opponent,homeAway,
+  venueAddress}` und `DB.callups[]` in einem `commit()`, danach Sprung zu
+  `viewCallupPrint()` (druckbare Ansicht, `data-act="print"` wie beim
+  bestehenden Bericht via `window.print()`).
+- **Treffpunkt-Vorschlag** (`proposeMeetTime()`): 1 Stunde vor Anpfiff am
+  Spielort; bei Auswärtsspielen zusätzlich abzüglich der Fahrzeit ab Bülach,
+  Treffpunkt dann fix "Militärparkplatz Bülach" statt der Spielortadresse.
+  Beide Vorschläge sind frei überschreibbar (`cw-meetplace`/`cw-meettime`).
+- **Fahrzeit-Wiederverwendung**: `DB.venues` speichert die Fahrzeit einmalig
+  pro Adresse (`venueFor()`, Vergleich getrimmt/kleingeschrieben); `cwsave`
+  legt einen Eintrag an oder aktualisiert ihn. Bewusst KEINE
+  Geocoding-/Karten-API – der Trainer trägt die Minuten einmalig von Hand ein.
+- **Ein Wettkampftag hat höchstens ein Aufgebot** (`callupForMatch()` sucht
+  per `matchId`, `cwsave` überschreibt ein bestehendes statt ein zweites
+  anzulegen) – dadurch ist ein Aufgebot jederzeit nachträglich anpassbar,
+  ohne Duplikate zu erzeugen.
+- **`keeperId`**: markiert den Torhüter NUR für dieses eine Aufgebot (nicht am
+  Spieler selbst) – dieselbe Person kann im nächsten Aufgebot ohne
+  Sonderbehandlung wieder als Feldspieler erscheinen.
+- **`guests`**: Freitext (Name + optional Team), für Spieler aus anderen
+  Teams, die punktuell aushelfen – bewusst kein Verweis auf `players`, da sie
+  nicht zum eigenen Kader gehören und keine eigene Anwesenheitsstatistik
+  benötigen.
+- **Keine Trainer-Telefonnummern**: gemäss Datensparsamkeits-Grundsatz (siehe
+  Abschnitt "Bewusste Nicht-Ziele"/`README.md`) absichtlich nicht im Aufgebot
+  enthalten, obwohl die Papiervorlage sie hatte.
+- **Logo**: kommt aus `TEAM.logo` (`docs/config.js`, optional, data-URI) –
+  NICHT Teil des Datenbestands, da es sich nicht pro Speicherung ändert und
+  sonst bei jeder Anfrage mitübertragen würde.
 
 ---
 

@@ -122,7 +122,7 @@ function withPins(state, pins) {
 /* ---- Eingehende Daten grob pruefen ---- */
 function validateState(s) {
   if (!s || typeof s !== 'object' || !s.settings || typeof s.settings !== 'object') return 'bad_state';
-  var keys = ['coaches', 'players', 'rules', 'singles', 'records'];
+  var keys = ['coaches', 'players', 'rules', 'singles', 'records', 'venues', 'callups'];
   for (var i = 0; i < keys.length; i++) if (!Array.isArray(s[keys[i]])) return 'bad_state';
   if (s.players.length > MAX_PLAYERS || s.coaches.length > MAX_COACHES || s.records.length > MAX_RECORDS) return 'too_large';
   return null;
@@ -396,6 +396,35 @@ function renderSheets(state) {
   put(sh, rows);
   if (recs.length) sh.getRange(2, 10, recs.length, 1).setNumberFormat('0%');
 
+  // --- Aufgebote ---
+  if ((state.callups || []).length) {
+    sh = sheetNamed('Aufgebote');
+    var singlesById = {};
+    state.singles.forEach(function (m) { singlesById[m.id] = m; });
+    var playersById = {};
+    players.forEach(function (p) { playersById[p.id] = p; });
+    var coachesById = {};
+    state.coaches.forEach(function (c) { coachesById[c.id] = c; });
+    rows = [['Datum', 'Gegner', 'Heim/Auswärts', 'Besammlungszeit', 'Besammlungsort', 'Trainer', 'Spieler', 'Anzahl']];
+    state.callups.slice().sort(function (a, b) {
+      var ma = singlesById[a.matchId], mb = singlesById[b.matchId];
+      var da = ma ? ma.date : '', dbb = mb ? mb.date : '';
+      return da < dbb ? -1 : da > dbb ? 1 : 0;
+    }).forEach(function (cu) {
+      var m = singlesById[cu.matchId];
+      if (!m) return; // Wettkampftag wurde inzwischen geloescht
+      var names = (cu.playerIds || []).map(function (pid) {
+        var p = playersById[pid]; if (!p) return null;
+        return nameOf(p) + (cu.keeperId === pid ? ' (TW)' : '');
+      }).filter(Boolean);
+      (cu.guests || []).forEach(function (g) { names.push((g.name || '') + (g.team ? ' (' + g.team + ')' : '')); });
+      var coachN = (cu.coachIds || []).map(function (cid) { var c = coachesById[cid]; return c ? nameOf(c) : null; }).filter(Boolean).join(', ');
+      rows.push([fmtDay(m.date), m.opponent || '', m.homeAway === 'home' ? 'Heim' : 'Auswärts',
+        cu.meetTime || '', cu.meetPlace || '', coachN, names.join(', '), names.length]);
+    });
+    put(sh, rows);
+  }
+
   // --- Matrix ---
   sh = sheetNamed('Matrix');
   var head = ['Nachname', 'Vorname'];
@@ -429,6 +458,7 @@ function renderSheets(state) {
     ['Quote (Trainer)', 'Einsätze geteilt durch alle erfassten Termine - Blatt "Trainer", für die Spesenabrechnung'],
     ['', ''],
     ['Trainerplanung', 'zeigt nur Termine, zu denen mindestens ein Trainer bereits zu- oder abgesagt hat'],
+    ['Aufgebote', 'zeigt nur Wettkampftage, für die bereits ein Aufgebot erstellt wurde'],
     ['Achtung', 'Diese Blätter werden bei jeder Speicherung in der App neu geschrieben. Eigene Eingaben hier gehen verloren.']
   ]);
 }
@@ -458,6 +488,8 @@ function SEED() {
     players: [],
     rules: [],
     singles: [],
-    records: []
+    records: [],
+    venues: [],
+    callups: []
   };
 }

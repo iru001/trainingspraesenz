@@ -158,6 +158,40 @@ input::placeholder,textarea::placeholder{color:var(--ink-3)}
 .pill-done{background:var(--surface-2);color:var(--ink-2);border-color:var(--line)}
 .pill-yes{background:var(--accent-soft);color:var(--accent);border-color:color-mix(in srgb,var(--accent) 25%,transparent)}
 .pill-no{background:var(--bad-soft);color:var(--bad);border-color:color-mix(in srgb,var(--bad) 25%,transparent)}
+.pill-home{background:var(--accent-soft);color:var(--accent);border-color:color-mix(in srgb,var(--accent) 25%,transparent)}
+.pill-away{background:var(--info-soft);color:var(--info);border-color:color-mix(in srgb,var(--info) 30%,transparent)}
+
+.cwitem{display:flex;align-items:center;gap:10px;padding:10px 13px;border-top:1px solid var(--line)}
+.cwitem:first-child{border-top:0}
+.cwitem.sel{background:var(--accent-soft)}
+.cwitem .tw{border:1px solid var(--line-2);background:var(--surface);border-radius:8px;padding:6px 10px;font-size:11.5px;font-weight:800;font-family:Oswald,sans-serif;letter-spacing:.02em;color:var(--ink-3);flex:none}
+.cwitem .tw[aria-pressed="true"]{background:var(--warn);border-color:var(--warn);color:#fff}
+.cwitem .tw:disabled{opacity:.35}
+button.item{width:100%;text-align:left;background:none;border:0;border-top:1px solid var(--line);cursor:pointer;font:inherit;color:inherit}
+button.item:first-child{border-top:0}
+.guestrow{display:flex;gap:6px;margin-top:8px}
+.guestrow input{flex:1;min-width:0}
+.guestchip{display:inline-flex;align-items:center;gap:6px;background:var(--surface-2);border:1px solid var(--line-2);border-radius:999px;padding:5px 6px 5px 12px;font-size:13px;margin:0 6px 6px 0}
+.guestchip button{border:0;background:var(--surface-3);color:var(--ink-2);width:20px;height:20px;border-radius:50%;font-size:13px;line-height:1;cursor:pointer}
+
+/* ---------- Aufgebot: Druckansicht ---------- */
+.capaper{background:#fff;color:#1a1a1a;border-radius:var(--r);box-shadow:var(--shadow);padding:26px 24px;font-size:13.5px;line-height:1.6}
+.capaper .ca-head{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;margin-bottom:16px}
+.capaper h2{font-family:"Source Sans 3",sans-serif;font-size:16px;font-weight:700;margin:0 0 8px}
+.capaper .ca-logo{width:100px;flex:none}
+.capaper .ca-logo img{width:100%;display:block}
+.capaper .ca-lbl{font-weight:700}
+.capaper ol{margin:8px 0 20px;padding-left:24px}
+.capaper ol li{margin-bottom:4px}
+.capaper table{border-collapse:separate;border-spacing:0;width:100%;margin-bottom:14px}
+.capaper table td{padding:9px 14px 9px 0;vertical-align:top;border-bottom:1px solid #e5e5e5}
+.capaper table tr:last-child td{border-bottom:0}
+.capaper table td:first-child{font-weight:700;width:34%;white-space:nowrap;padding-left:0}
+.capaper .ca-foot{font-size:12px;color:#333;margin-top:8px}
+.capaper .ca-hi{background:#FCE98B}
+@media print{
+  .capaper{box-shadow:none;padding:0}
+}
 .pill-wait{background:var(--surface-2);color:var(--ink-3);border-color:var(--line)}
 
 .banner{
@@ -407,6 +441,8 @@ var SK = {}; STATUS.forEach(function(s){ SK[s.k] = s; });
 // in die Anwesenheitsquote hinein (siehe playerStats()), taucht aber in Matrix-
 // Zellen als eigene Kuerzel auf - abFor() deckt beide Faelle sicher ab.
 function abFor(st){ return st === "na" ? "NA" : (SK[st] ? SK[st].ab : ""); }
+var CALLUP_NOTES_DEFAULT = "Trikot, Fussballschuhe (Nocken/Tausendfüssler), Schienbeinschoner, Torwarthandschuhe (wer hat), Wasserflasche. Wertsachen bleiben zu Hause – die Trainer tragen keine Verantwortung.";
+var CALLUP_CANCEL_DEFAULT = "Bitte umgehend im Gruppen-Chat informieren.";
 var ICON = {
   cal:'<svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>',
   chart:'<svg viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>',
@@ -427,7 +463,7 @@ var DB = null;           // wird nach der PIN-Eingabe vom Server geladen
 var REV = 0;             // Stand des Datenbestands (verhindert Überschreiben)
 var PIN = "";            // App-PIN dieser Sitzung
 var SHEETURL = "";       // Adresse der Google-Tabelle
-var UI = {view:"events", occ:null, statType:"all", statRange:"season", statSort:"quote", adminTab:"players"};
+var UI = {view:"events", occ:null, statType:"all", statRange:"season", statSort:"quote", adminTab:"players", callup:null, callupPrintId:null};
 var RO = false;          // Nur-Lese-Modus (in dieser Fassung nicht verwendet)
 var UNLOCKED = false;    // App-PIN eingegeben und Daten geladen
 var ADMIN_OK = false;    // Admin-PIN eingegeben
@@ -446,8 +482,8 @@ function normalize(d){
   if (!d || typeof d !== "object") d = {};
   d.v = 1;
   d.settings = d.settings || {};
-  ["team","season","seasonStart","seasonEnd","pin","adminPin"].forEach(function(k){ d.settings[k] = d.settings[k] || ""; });
-  ["coaches","players","rules","singles","records"].forEach(function(k){ if (!Array.isArray(d[k])) d[k] = []; });
+  ["team","season","seasonStart","seasonEnd","pin","adminPin","callupNotes","callupCancelHint"].forEach(function(k){ d.settings[k] = d.settings[k] || ""; });
+  ["coaches","players","rules","singles","records","venues","callups"].forEach(function(k){ if (!Array.isArray(d[k])) d[k] = []; });
   d.players.forEach(function(p){ delete p.birth; });   // Geburtsdaten werden bewusst nicht gespeichert
   if (!d.availability || typeof d.availability !== "object" || Array.isArray(d.availability)) d.availability = {};
   return d;
@@ -784,6 +820,59 @@ function myCoachId(){
   var id = UI.myCoach || storedCoach();
   if (id && !byId(DB.coaches, id)) id = "";           // Trainer wurde geloescht
   return id;
+}
+
+/* ===================== Aufgebot ===================== */
+function subtractMinutes(hhmm, min){
+  var p = String(hhmm || "0:0").split(":");
+  var d = new Date(2000, 0, 1, (+p[0] || 0), (+p[1] || 0));
+  d.setMinutes(d.getMinutes() - min);
+  return pad(d.getHours()) + ":" + pad(d.getMinutes());
+}
+function venueFor(address){
+  var key = String(address || "").trim().toLowerCase();
+  if (!key) return null;
+  for (var i = 0; i < DB.venues.length; i++) if (String(DB.venues[i].address || "").trim().toLowerCase() === key) return DB.venues[i];
+  return null;
+}
+function callupForMatch(matchId){
+  for (var i = 0; i < DB.callups.length; i++) if (DB.callups[i].matchId === matchId) return DB.callups[i];
+  return null;
+}
+function proposeMeetTime(kickoff, homeAway, travelMinutes){
+  return subtractMinutes(kickoff, 60 + (homeAway === "away" ? (Number(travelMinutes) || 0) : 0));
+}
+function newCallupState(matchId){
+  var m = byId(DB.singles, matchId) || {};
+  var ex = callupForMatch(matchId);
+  var away = (m.homeAway || "away") === "away";
+  var addr = m.venueAddress || "";
+  var v = venueFor(addr);
+  var travel = ex ? (ex.travelMinutes || 0) : (v ? v.travelMinutes : 0);
+  var meetPlace = ex ? ex.meetPlace : (away ? "Militärparkplatz Bülach" : addr);
+  var meetTime = ex ? ex.meetTime : (m.time ? proposeMeetTime(m.time, away ? "away" : "home", travel) : "");
+  return {
+    matchId: matchId, step: 1,
+    opponent: m.opponent || "",
+    homeAway: away ? "away" : "home",
+    venueAddress: addr,
+    travelMinutes: travel,
+    meetPlace: meetPlace,
+    meetTime: meetTime,
+    coachIds: ex ? ex.coachIds.slice() : (myCoachId() ? [myCoachId()] : []),
+    playerIds: ex ? ex.playerIds.slice() : [],
+    keeperId: ex ? (ex.keeperId || "") : "",
+    guests: ex ? ex.guests.map(function(g){ return {name: g.name, team: g.team}; }) : []
+  };
+}
+function captureCallupStep1(){
+  var cw = UI.callup; if (!cw || cw.step !== 1) return;
+  if (el("cw-opp")) cw.opponent = val("cw-opp");
+  if (el("cw-ha")) cw.homeAway = val("cw-ha") || "away";
+  if (el("cw-addr")) cw.venueAddress = val("cw-addr");
+  if (el("cw-travel")) cw.travelMinutes = Number(val("cw-travel")) || 0;
+  if (el("cw-meetplace")) cw.meetPlace = val("cw-meetplace");
+  if (el("cw-meettime")) cw.meetTime = val("cw-meettime");
 }
 function planOccurrences(){
   return plannedOccurrences(todayISO(), seasonTo())
@@ -1143,7 +1232,7 @@ function exportCsv(){
 }
 
 /* ===================== Ansicht: Admin ===================== */
-var ADMIN_TABS = [["players","Spieler"],["coaches","Trainer"],["plan","Termine"],["settings","Team"]];
+var ADMIN_TABS = [["players","Spieler"],["coaches","Trainer"],["plan","Termine"],["callups","Aufgebote"],["settings","Team"]];
 
 function viewAdmin(){
   var h = '<div class="tabs">' + ADMIN_TABS.map(function(t){
@@ -1153,6 +1242,7 @@ function viewAdmin(){
   if (UI.adminTab === "players") h += adminPeople("players");
   else if (UI.adminTab === "coaches") h += adminPeople("coaches");
   else if (UI.adminTab === "plan") h += adminPlan();
+  else if (UI.adminTab === "callups") h += adminCallups();
   else h += adminSettings();
   return h;
 }
@@ -1231,20 +1321,41 @@ function adminPlan(){
   h += '<div class="eyebrow">Einzeltermine</div>';
   var sing = DB.singles.slice().sort(sortByDate).reverse();
   h += sing.length ? '<div class="card">' + sing.map(function(g){
+      var ha = g.type === "match" && g.homeAway ? ' <span class="pill ' + (g.homeAway === "home" ? "pill-home" : "pill-away") + '">' + (g.homeAway === "home" ? "Heim" : "Auswärts") + "</span>" : "";
       return '<div class="item"><span class="grow"><b>' + fmtShort(g.date) + "</b>" + (g.time ? " &middot; " + esc(timeRange(g)) : "")
-        + '<br><span class="small muted"><span class="pill ' + (g.type === "match" ? "pill-match" : "pill-training") + '">' + typeLabel(g.type) + "</span> " + esc(g.label || "") + "</span></span>"
+        + '<br><span class="small muted"><span class="pill ' + (g.type === "match" ? "pill-match" : "pill-training") + '">' + typeLabel(g.type) + "</span> " + esc(g.label || "") + (g.type === "match" && g.opponent ? " &middot; " + esc(g.opponent) : "") + ha + "</span></span>"
         + confirmRow(g.id, "Löschen", "delsingle") + "</div>";
     }).join("") + "</div>"
     : '<div class="card empty">Noch keine Einzeltermine.</div>';
 
   h += '<div class="card" style="padding:13px;margin-top:12px"><div class="formgrid">'
-    + field("s-type", "Art", '<select id="s-type"><option value="match">Wettkampf</option><option value="training">Training</option></select>')
+    + field("s-type", "Art", '<select id="s-type" onchange="document.getElementById(\'s-matchfields\').style.display = this.value===\'match\' ? \'\' : \'none\'"><option value="match">Wettkampf</option><option value="training">Training</option></select>')
     + field("s-date", "Datum", '<input type="date" id="s-date" value="' + todayISO() + '">')
     + field("s-time", "Von", '<input type="time" id="s-time" value="10:00">')
     + field("s-end", "Bis", '<input type="time" id="s-end" value="">')
     + '</div><div class="formgrid" style="margin-top:10px">'
     + field("s-label", "Bezeichnung (optional)", '<input type="text" id="s-label" placeholder="z. B. Meisterschaftsspiel gegen FC Muster">')
-    + '</div><button class="btn btn-primary btn-block" style="margin-top:10px" data-act="addsingle">Einzeltermin hinzufügen</button></div>';
+    + '</div><div class="formgrid" id="s-matchfields" style="margin-top:10px">'
+    + field("s-opp", "Gegner (für Aufgebot)", '<input type="text" id="s-opp" placeholder="z. B. FC Muster c">')
+    + field("s-ha", "Heim / Auswärts", '<select id="s-ha"><option value="away">Auswärts</option><option value="home">Heim</option></select>')
+    + field("s-addr", "Sportplatz-Adresse", '<input type="text" id="s-addr" placeholder="z. B. Sportanlage Buhwil, Effretikon">')
+    + '</div><p class="small muted" style="margin:6px 0 0">Gegner, Heim/Auswärts und Adresse lassen sich auch später beim Erstellen des Aufgebots ergänzen oder anpassen.</p>'
+    + '<button class="btn btn-primary btn-block" style="margin-top:10px" data-act="addsingle">Einzeltermin hinzufügen</button></div>';
+  return h;
+}
+
+function adminCallups(){
+  var matches = DB.singles.filter(function(s){ return s.type === "match"; }).slice().sort(sortByDate);
+  var h = '<div class="eyebrow">Aufgebote</div>'
+    + '<p class="small muted" style="margin:-4px 0 10px">Antippen öffnet den Wizard zum Erstellen oder Anpassen des Aufgebots für diesen Wettkampftag.</p>';
+  h += matches.length ? '<div class="card">' + matches.map(function(m){
+      var cu = callupForMatch(m.id);
+      var ha = m.homeAway ? ' <span class="pill ' + (m.homeAway === "home" ? "pill-home" : "pill-away") + '">' + (m.homeAway === "home" ? "Heim" : "Auswärts") + "</span>" : "";
+      var status = cu ? ("Aufgebot erstellt · " + cu.playerIds.length + " Spieler, " + cu.coachIds.length + " Trainer") : "Noch kein Aufgebot";
+      return '<button class="item" data-act="callupopen" data-id="' + m.id + '"><span class="grow"><b>' + fmtShort(m.date) + "</b> · " + esc(m.opponent || m.label || "Wettkampf") + ha
+        + '<br><span class="small muted">' + esc(status) + '</span></span><span class="ev-side">' + ICON.chev + "</span></button>";
+    }).join("") + "</div>"
+    : '<div class="card empty">Noch keine Wettkampftage hinterlegt. Zuerst unter «Termine» anlegen.</div>';
   return h;
 }
 
@@ -1260,6 +1371,11 @@ function adminSettings(){
     + field("t-pin", "App-PIN", '<input type="text" inputmode="numeric" id="t-pin" value="' + esc(s.pin) + '" placeholder="leer = kein Schutz">')
     + field("t-apin", "Admin-PIN", '<input type="text" inputmode="numeric" id="t-apin" value="' + esc(s.adminPin) + '" placeholder="leer = kein Schutz">')
     + '</div><button class="btn btn-primary btn-block" style="margin-top:10px" data-act="savesettings">Speichern</button></div>'
+    + '<div class="eyebrow">Aufgebot</div><div class="card" style="padding:13px">'
+    + '<p class="small muted" style="margin:0 0 10px">Fester Text, der auf jedem Aufgebot unter «Mitnehmen» und «Abmeldungen/Verspätungen» erscheint. Leer lassen für den Standardtext.</p>'
+    + '<label class="f" for="t-cnotes">Mitnehmen<textarea id="t-cnotes" placeholder="' + esc(CALLUP_NOTES_DEFAULT) + '">' + esc(s.callupNotes) + "</textarea></label>"
+    + '<label class="f" for="t-ccancel" style="margin-top:10px">Abmeldungen/Verspätungen<textarea id="t-ccancel" placeholder="' + esc(CALLUP_CANCEL_DEFAULT) + '">' + esc(s.callupCancelHint) + "</textarea></label>"
+    + '<button class="btn btn-primary btn-block" style="margin-top:10px" data-act="savesettings">Speichern</button></div>'
     + '<div class="eyebrow">Zugriff</div><div class="card" style="padding:13px">'
     + '<p class="small muted" style="margin:0">Die App ist über ihre Adresse für alle erreichbar – den Zugang regelt der <strong>App-PIN</strong>. '
     + 'Ohne ihn gibt der Server keine Daten heraus. Wer den PIN hat, kann Anwesenheiten erfassen und bearbeiten.</p>'
@@ -1274,6 +1390,133 @@ function adminSettings(){
     + '<button class="btn btn-block" data-act="backup">Sicherung herunterladen</button></div>'
     + '<p class="small muted" style="margin-top:16px">' + DB.players.length + " Spieler &middot; " + DB.coaches.length + " Trainer &middot; "
     + DB.records.length + " erfasste Termine</p>";
+}
+
+/* ===================== Aufgebot: Wizard ===================== */
+function viewCallupWizard(){
+  var cw = UI.callup;
+  var m = cw ? byId(DB.singles, cw.matchId) : null;
+  if (!cw || !m) return '<div class="card empty">Dieser Wettkampftag wurde gelöscht.</div>';
+  var titles = ["", "Treffpunkt", "Trainer", "Spieler"];
+  var h = '<div class="eyebrow">Schritt ' + cw.step + ' von 3 &middot; ' + titles[cw.step] + '</div>'
+    + '<p class="small muted" style="margin:-4px 0 12px">' + fmtDate(m.date) + (m.time ? " &middot; Anpfiff " + esc(m.time) + " Uhr" : "") + '</p>';
+  if (cw.step === 1) h += callupStep1(cw, m);
+  else if (cw.step === 2) h += callupStep2(cw);
+  else h += callupStep3(cw);
+  return h;
+}
+
+function callupStep1(cw){
+  var away = cw.homeAway === "away";
+  return '<div class="card" style="padding:13px"><div class="formgrid">'
+    + field("cw-opp", "Gegner", '<input type="text" id="cw-opp" value="' + esc(cw.opponent) + '" placeholder="z. B. FC Muster c">')
+    + field("cw-ha", "Heim / Auswärts", '<select id="cw-ha"><option value="away"' + (away ? " selected" : "") + '>Auswärts</option><option value="home"' + (!away ? " selected" : "") + '>Heim</option></select>')
+    + '</div><div class="formgrid" style="margin-top:10px">'
+    + field("cw-addr", "Sportplatz-Adresse", '<input type="text" id="cw-addr" value="' + esc(cw.venueAddress) + '" placeholder="z. B. Sportanlage Buhwil, Effretikon">')
+    + (away ? field("cw-travel", "Fahrzeit ab Bülach (Minuten)", '<input type="number" min="0" inputmode="numeric" id="cw-travel" value="' + esc(String(cw.travelMinutes || 0)) + '">') : "")
+    + '</div><button class="btn btn-sm" style="margin-top:2px" data-act="cwrecalc">Treffpunkt &amp; -zeit neu vorschlagen</button>'
+    + '<div class="formgrid" style="margin-top:12px">'
+    + field("cw-meetplace", "Besammlungsort", '<input type="text" id="cw-meetplace" value="' + esc(cw.meetPlace) + '">')
+    + field("cw-meettime", "Besammlungszeit", '<input type="time" id="cw-meettime" value="' + esc(cw.meetTime) + '">')
+    + '</div><p class="small muted" style="margin:8px 0 0">Vorschlag: 1 Stunde vor Anpfiff am Spielort'
+    + (away ? " abzüglich Fahrzeit ab Bülach &ndash; Treffpunkt bei Auswärtsspielen ist der Militärparkplatz Bülach." : ".")
+    + " Beide Felder lassen sich frei anpassen.</p></div>"
+    + '<div class="wrap" style="margin-top:14px;justify-content:space-between">'
+    + '<button class="btn" data-act="back">Zurück</button>'
+    + '<button class="btn btn-primary" data-act="cwnext">Weiter</button></div>';
+}
+
+function callupStep2(cw){
+  var coaches = activeCoaches();
+  var h = '<p class="small muted" style="margin:0 0 10px">Mindestens 1, maximal 2 Trainer &ndash; antippen zum An-/Abwählen.</p>';
+  h += coaches.length ? '<div class="wrap">' + coaches.map(function(c){
+      var on = cw.coachIds.indexOf(c.id) >= 0;
+      return '<button class="coach" data-act="cwcoach" data-id="' + c.id + '" aria-pressed="' + on + '">' + (on ? ICON.check : "") + esc(fullName(c)) + "</button>";
+    }).join("") + "</div>"
+    : '<div class="card empty">Noch keine Trainer erfasst.</div>';
+  h += '<div class="wrap" style="margin-top:16px;justify-content:space-between">'
+    + '<button class="btn" data-act="back">Zurück</button>'
+    + '<button class="btn btn-primary" data-act="cwnext">Weiter</button></div>';
+  return h;
+}
+
+function callupStep3(cw){
+  var players = activePlayers();
+  var h = '<p class="small muted" style="margin:0 0 4px">Antippen wählt aus/ab &middot; <b>TW</b> markiert den Torhüter für dieses Aufgebot.</p>'
+    + '<div class="eyebrow">Ausgewählt: ' + cw.playerIds.length + ' / 14</div>';
+  h += players.length ? '<div class="card">' + players.map(function(p){
+      var on = cw.playerIds.indexOf(p.id) >= 0;
+      var gk = cw.keeperId === p.id;
+      return '<div class="item cwitem' + (on ? " sel" : "") + '">'
+        + '<button class="grow" data-act="cwplayer" data-id="' + p.id + '" style="text-align:left;background:none;border:0;padding:0;font:inherit;color:inherit;cursor:pointer">'
+        + "<b>" + esc(p.first) + "</b> " + esc(p.last) + "</button>"
+        + '<button class="tw" data-act="cwgk" data-id="' + p.id + '" aria-pressed="' + gk + '"' + (on ? "" : " disabled") + '>TW</button></div>';
+    }).join("") + "</div>"
+    : '<div class="card empty">Noch keine Spieler erfasst.</div>';
+
+  h += '<div class="eyebrow">Gastspieler (optional)</div>'
+    + '<div class="guestrow"><input type="text" id="cw-gname" autocomplete="off" placeholder="Name">'
+    + '<input type="text" id="cw-gteam" autocomplete="off" placeholder="Team, z. B. D9c" style="max-width:120px">'
+    + '<button class="btn" data-act="cwguestadd">+</button></div>';
+  if (cw.guests.length) {
+    h += '<div class="wrap" style="margin-top:10px">' + cw.guests.map(function(g, i){
+      return '<span class="guestchip">' + esc(g.name) + (g.team ? ' <span class="muted small">' + esc(g.team) + "</span>" : "")
+        + '<button data-act="cwguestdel" data-idx="' + i + '">&times;</button></span>';
+    }).join("") + "</div>";
+  }
+
+  h += '<div class="wrap" style="margin-top:16px;justify-content:space-between">'
+    + '<button class="btn" data-act="back">Zurück</button>'
+    + '<button class="btn btn-primary" data-act="cwsave">' + (callupForMatch(cw.matchId) ? "Aufgebot aktualisieren" : "Aufgebot erstellen") + "</button></div>";
+  return h;
+}
+
+/* ===================== Aufgebot: Druckansicht ===================== */
+function viewCallupPrint(){
+  var m = byId(DB.singles, UI.callupPrintId);
+  if (!m) return '<div class="card empty">Dieser Wettkampftag wurde gelöscht.</div>';
+  var cu = callupForMatch(m.id);
+  if (!cu) return '<div class="card empty">Für diesen Wettkampftag besteht noch kein Aufgebot. <button class="btn btn-sm" style="margin-top:10px" data-act="callupopen" data-id="' + m.id + '">Aufgebot erstellen</button></div>';
+
+  var names = cu.playerIds.map(function(pid){
+    var p = byId(DB.players, pid); if (!p) return null;
+    return fullName(p) + (cu.keeperId === pid ? " (TW)" : "");
+  }).filter(Boolean);
+  cu.guests.forEach(function(g){ names.push(g.name + (g.team ? " (" + g.team + ")" : "")); });
+
+  var coachNames = cu.coachIds.map(function(cid){ var c = byId(DB.coaches, cid); return c ? fullName(c) : null; }).filter(Boolean).join(" und ");
+  var away = m.homeAway === "away";
+  var addr = m.venueAddress || "";
+  var mapsUrl = addr ? "https://maps.google.com/?q=" + encodeURIComponent(addr) : "";
+  var notes = DB.settings.callupNotes || CALLUP_NOTES_DEFAULT;
+  var cancelHint = DB.settings.callupCancelHint || CALLUP_CANCEL_DEFAULT;
+  var logo = (TEAM && TEAM.logo) ? '<div class="ca-logo"><img src="' + TEAM.logo + '" alt="' + esc(DB.settings.team || TITLE) + '"></div>' : "";
+
+  var h = '<div class="stack-s noprint" style="margin-bottom:14px">'
+    + '<button class="btn btn-primary btn-block" data-act="print">Drucken / als PDF sichern</button>'
+    + '<button class="btn btn-block" data-act="callupopen" data-id="' + m.id + '">Bearbeiten</button>'
+    + '<p class="small muted" style="margin:2px 0 0">Öffnet sich kein Druckdialog, im Browsermenü «Drucken» wählen &ndash; dort lässt sich «Als PDF sichern» auswählen.</p></div>';
+
+  h += '<div class="capaper"><div class="ca-head"><div>'
+    + "<h2>Spielaufgebot für " + (away ? "Auswärtsspiel" : "Heimspiel") + " am " + fmtShort(m.date) + "</h2>"
+    + '<div><span class="ca-lbl">Gegner:</span> ' + esc(m.opponent || "–") + "</div></div>"
+    + logo + "</div>";
+
+  h += '<div class="ca-lbl" style="margin-bottom:6px">Aufgebot für:</div><ol>' + names.map(function(n){ return "<li>" + esc(n) + "</li>"; }).join("") + "</ol>";
+
+  h += "<table>"
+    + "<tr><td>Wann:</td><td><span class=\"ca-hi\">" + esc(fmtDate(m.date)) + "</span></td></tr>"
+    + "<tr><td>Besammlungszeit:</td><td>" + esc(cu.meetTime ? cu.meetTime + " Uhr" : "–") + "</td></tr>"
+    + "<tr><td>Besammlungsort:</td><td>" + esc(cu.meetPlace || "–") + "</td></tr>"
+    + "<tr><td>Spieldauer:</td><td>" + esc(timeRange(m) || "–") + "</td></tr>"
+    + "<tr><td>Adresse Sportplatz:</td><td>" + (addr ? esc(addr) + (mapsUrl ? ' (<a class="maplink" href="' + esc(mapsUrl) + '" target="_blank" rel="noopener">Google Maps</a>)' : "") : "–") + "</td></tr>"
+    + "<tr><td>Mitnehmen:</td><td>" + esc(notes) + "</td></tr>"
+    + "</table>";
+
+  h += '<div class="ca-foot"><span class="ca-hi">Abmeldungen/Verspätungen:</span> ' + esc(cancelHint) + "</div>"
+    + '<div class="ca-foot" style="margin-top:6px"><span class="ca-lbl">Trainer/Verantwortliche:</span> ' + esc(coachNames || "–") + "</div>";
+  h += "</div>";
+  return h;
 }
 
 /* ===================== Ad-hoc-Termin ===================== */
@@ -1573,7 +1816,7 @@ function render(){
   if (!UNLOCKED || !DB) { el("root").innerHTML = viewLock("app"); return; }
   var team = DB.settings.team || TITLE;
   var sub = DB.settings.season ? "Saison " + DB.settings.season : "Anwesenheit";
-  var back = (UI.view === "record" || UI.view === "adhoc" || UI.view === "report" || UI.view === "plandetail");
+  var back = (UI.view === "record" || UI.view === "adhoc" || UI.view === "report" || UI.view === "plandetail" || UI.view === "callup" || UI.view === "callupprint");
   var body =
       UI.view === "record"     ? viewRecord()
     : UI.view === "adhoc"      ? viewAdhoc()
@@ -1581,6 +1824,8 @@ function render(){
     : UI.view === "stats"      ? viewStats()
     : UI.view === "planning"   ? (myCoachId() ? viewPlanning() : viewPlanIdentity())
     : UI.view === "plandetail" ? viewPlanDetail()
+    : UI.view === "callup"     ? (ADMIN_OK ? viewCallupWizard() : viewLock("admin"))
+    : UI.view === "callupprint"? (ADMIN_OK ? viewCallupPrint() : viewLock("admin"))
     : UI.view === "admin"      ? (ADMIN_OK ? viewAdmin() : viewLock("admin"))
     : viewEvents();
 
@@ -1655,7 +1900,16 @@ var ACT = {
     if (t.getAttribute("data-tab")) UI.adminTab = t.getAttribute("data-tab");
     go(v);
   },
-  back: function(){ go(UI.view === "report" ? "stats" : UI.view === "plandetail" ? "planning" : "events"); },
+  back: function(){
+    if (UI.view === "callup") {
+      captureCallupStep1();
+      if (UI.callup && UI.callup.step > 1) { UI.callup.step -= 1; render(); }
+      else { UI.callup = null; UI.adminTab = "callups"; go("admin"); }
+      return;
+    }
+    if (UI.view === "callupprint") { UI.callupPrintId = null; UI.adminTab = "callups"; go("admin"); return; }
+    go(UI.view === "report" ? "stats" : UI.view === "plandetail" ? "planning" : "events");
+  },
   report: function(){ go("report"); },
   print: function(){ try { window.print(); } catch(e){ toast("Der Browser hat das Drucken blockiert – bitte über das Browsermenü drucken."); } },
   pin: function(t){ addDigit(t.getAttribute("data-d")); },
@@ -1855,8 +2109,11 @@ var ACT = {
   },
   addsingle: function(){
     var d = val("s-date"); if (!d) { toast("Bitte ein Datum wählen."); return; }
+    var type = val("s-type");
     commit(function(db){
-      db.singles.push({id: uid("s"), type: val("s-type"), date: d, time: val("s-time"), timeEnd: val("s-end"), label: val("s-label")});
+      var g = {id: uid("s"), type: type, date: d, time: val("s-time"), timeEnd: val("s-end"), label: val("s-label")};
+      if (type === "match") { g.opponent = val("s-opp"); g.homeAway = val("s-ha") || "away"; g.venueAddress = val("s-addr"); }
+      db.singles.push(g);
     }, "Einzeltermin hinzugefügt.");
   },
   delsingle: function(t){
@@ -1864,10 +2121,105 @@ var ACT = {
     commit(function(db){ db.singles = db.singles.filter(function(s){ return s.id !== id; }); }, "Termin gelöscht.")
       .then(function(ok){ if (ok) UI.confirm = null; });
   },
+  callupopen: function(t){
+    var id = t.getAttribute("data-id");
+    UI.callup = newCallupState(id);
+    go("callup");
+  },
+  cwrecalc: function(){
+    var cw = UI.callup; if (!cw) return;
+    captureCallupStep1();
+    var m = byId(DB.singles, cw.matchId);
+    cw.meetPlace = cw.homeAway === "away" ? "Militärparkplatz Bülach" : cw.venueAddress;
+    cw.meetTime = (m && m.time) ? proposeMeetTime(m.time, cw.homeAway, cw.travelMinutes) : "";
+    render();
+  },
+  cwnext: function(){
+    var cw = UI.callup; if (!cw) return;
+    captureCallupStep1();
+    cw.step = Math.min(3, cw.step + 1);
+    render();
+  },
+  cwcoach: function(t){
+    var cw = UI.callup; if (!cw) return;
+    var id = t.getAttribute("data-id");
+    var on = cw.coachIds.indexOf(id) >= 0;
+    if (on) {
+      if (cw.coachIds.length <= 1) { toast("Mindestens ein Trainer nötig."); return; }
+      cw.coachIds = cw.coachIds.filter(function(x){ return x !== id; });
+    } else {
+      if (cw.coachIds.length >= 2) { toast("Maximal zwei Trainer möglich."); return; }
+      cw.coachIds.push(id);
+    }
+    render();
+  },
+  cwplayer: function(t){
+    var cw = UI.callup; if (!cw) return;
+    var id = t.getAttribute("data-id");
+    var on = cw.playerIds.indexOf(id) >= 0;
+    if (on) {
+      cw.playerIds = cw.playerIds.filter(function(x){ return x !== id; });
+      if (cw.keeperId === id) cw.keeperId = "";
+    } else {
+      if (cw.playerIds.length >= 14) { toast("Maximal 14 Spieler möglich."); return; }
+      cw.playerIds.push(id);
+    }
+    render();
+  },
+  cwgk: function(t){
+    var cw = UI.callup; if (!cw) return;
+    var id = t.getAttribute("data-id");
+    if (cw.playerIds.indexOf(id) < 0) return;
+    cw.keeperId = (cw.keeperId === id) ? "" : id;
+    render();
+  },
+  cwguestadd: function(){
+    var cw = UI.callup; if (!cw) return;
+    var name = val("cw-gname"), team = val("cw-gteam");
+    if (!name) return;
+    cw.guests.push({name: name, team: team});
+    render();
+  },
+  cwguestdel: function(t){
+    var cw = UI.callup; if (!cw) return;
+    cw.guests.splice(Number(t.getAttribute("data-idx")), 1);
+    render();
+  },
+  cwsave: function(){
+    var cw = UI.callup; if (!cw) return;
+    if (!cw.coachIds.length) { toast("Bitte mindestens einen Trainer wählen."); return; }
+    if (!cw.playerIds.length) { toast("Bitte mindestens einen Spieler wählen."); return; }
+    var matchId = cw.matchId;
+    var payload = {
+      opponent: cw.opponent, homeAway: cw.homeAway, venueAddress: cw.venueAddress,
+      travelMinutes: cw.travelMinutes, meetPlace: cw.meetPlace, meetTime: cw.meetTime,
+      coachIds: cw.coachIds.slice(), playerIds: cw.playerIds.slice(), keeperId: cw.keeperId,
+      guests: cw.guests.map(function(g){ return {name: g.name, team: g.team}; })
+    };
+    commit(function(db){
+      var m = byId(db.singles, matchId);
+      if (m) { m.opponent = payload.opponent; m.homeAway = payload.homeAway; m.venueAddress = payload.venueAddress; }
+      if (payload.homeAway === "away" && payload.venueAddress) {
+        var key = payload.venueAddress.trim().toLowerCase();
+        var v = db.venues.filter(function(x){ return String(x.address || "").trim().toLowerCase() === key; })[0];
+        if (v) v.travelMinutes = payload.travelMinutes;
+        else db.venues.push({address: payload.venueAddress, travelMinutes: payload.travelMinutes});
+      }
+      var existing = db.callups.filter(function(c){ return c.matchId === matchId; })[0];
+      if (existing) {
+        existing.meetPlace = payload.meetPlace; existing.meetTime = payload.meetTime; existing.travelMinutes = payload.travelMinutes;
+        existing.coachIds = payload.coachIds; existing.playerIds = payload.playerIds; existing.keeperId = payload.keeperId; existing.guests = payload.guests;
+      } else {
+        db.callups.push({id: uid("cu"), matchId: matchId, meetPlace: payload.meetPlace, meetTime: payload.meetTime, travelMinutes: payload.travelMinutes,
+          coachIds: payload.coachIds, playerIds: payload.playerIds, keeperId: payload.keeperId, guests: payload.guests});
+      }
+    }, "Aufgebot gespeichert.", {view: "callupprint", callupPrintId: matchId, callup: null});
+  },
   savesettings: function(){
     var team = val("t-team"), season = val("t-season"), s = val("t-start"), e = val("t-end");
     var pin = val("t-pin").replace(/\D/g, ""), apin = val("t-apin").replace(/\D/g, "");
-    commit(function(db){ db.settings = {team: team, season: season, seasonStart: s, seasonEnd: e, pin: pin, adminPin: apin}; },
+    var cnotes = val("t-cnotes"), ccancel = val("t-ccancel");
+    commit(function(db){ db.settings = {team: team, season: season, seasonStart: s, seasonEnd: e, pin: pin, adminPin: apin, callupNotes: cnotes, callupCancelHint: ccancel}; },
       "Gespeichert.").then(function(ok){
         if (ok && TEAM) {
           PIN = pin;   // ab jetzt gilt der neue PIN auch fuer diese Sitzung

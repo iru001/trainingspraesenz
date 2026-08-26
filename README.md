@@ -80,8 +80,19 @@ statt die Arbeit des anderen zu überschreiben.
 - Spieler mit Vor- und Nachname, einzeln oder als Liste auf einmal
 - Trainer mit Vor-, Nachname und Funktion
 - Wöchentliche Trainings- und Wettkampftage mit Wochentag, Von-/Bis-Zeit und Gültigkeit
-- Einzeltermine mit Datum, Von-/Bis-Zeit und Bezeichnung
+- Einzeltermine mit Datum, Von-/Bis-Zeit, Bezeichnung sowie bei Wettkämpfen Gegner,
+  Heim/Auswärts und Sportplatz-Adresse
 - Team, Saison, Saisonzeitraum sowie App-PIN und Admin-PIN
+
+**Aufgebot**
+- Schritt-für-Schritt-Wizard für Wettkampftage: Treffpunkt, Trainer (1–2), Spieler
+  (bis 14) plus frei erfassbare Gastspieler und Torhüter-Markierung
+- Treffpunkt/-zeit werden vorgeschlagen: 1 Stunde vor Anpfiff am Spielort, bei
+  Auswärtsspielen abzüglich Fahrzeit ab Bülach (Treffpunkt dann Militärparkplatz) –
+  einmal erfasste Fahrzeiten pro Ort werden für spätere Aufgebote vorgeschlagen
+- Ergebnis ist ein fertiges Aufgebot im Look der bisherigen Papier-Vorlage, druckbar
+  bzw. als PDF sicherbar wie der Anwesenheitsbericht
+- Bereits erstellte Aufgebote lassen sich jederzeit wieder öffnen und anpassen
 
 ## Datensparsamkeit
 
