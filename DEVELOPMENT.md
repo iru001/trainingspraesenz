@@ -366,6 +366,22 @@ werden (Prüfung in `ACT.cwsquadplayer`, `usedElsewhere` in der Anzeige).
 - **"Nicht im Aufgebot"** in der Druckansicht: automatisch berechnet
   (`activePlayers()` minus aller aufgebotenen Spieler-IDs, quer über alle
   Teams) – kein manuelles Feld, taucht bei beiden Modi auf.
+- **Vorausgefüllte Felder sind gesperrt** (Schritt 1: Gegner/Turnier-
+  Bezeichnung, Adresse, Fahrzeit, Besammlungsort/-zeit; Schritt "Teams":
+  Team-Name) – `lockedField()` zeigt sie nur als Text mit Stift-Symbol
+  (`ACT.cwfieldedit`, setzt `cw.unlocked[key]`) statt als Eingabefeld;
+  erst danach erscheint das echte `<input>`. Die rote Mülltonne
+  (`fieldConfirmRow()`, wiederverwendet `UI.confirm` wie `confirmRow()`)
+  verlangt eine Bestätigung ("Wirklich löschen?"), bevor `ACT.cwfielddel`
+  den Wert leert (bei Team-Namen: `ACT.cwremovesquad` entfernt das ganze
+  Team, nur ab zwei Teams sichtbar). **Wichtig**: Jeder Handler, der
+  während offener Bearbeitung eines Felds neu rendert (`cwsquadcoach`,
+  `cwsquadplayer`, `cwsquadgk`, `cwguestadd/-del`, `cwfieldedit/-del`),
+  muss zuerst `captureCallupStep1()`/`captureSquads()` aufrufen – sonst
+  geht eine gerade getippte, noch nicht übernommene Eingabe in einem
+  ANDEREN bereits entsperrten Feld beim Neuaufbau des DOM verloren
+  (das hätte fast unbemerkt einen Datenverlust verursacht, siehe
+  `tournament_ui.mjs`/`callup_ui.mjs` in den Tests).
 - **Keine Trainer-Telefonnummern**: gemäss Datensparsamkeits-Grundsatz (siehe
   Abschnitt "Bewusste Nicht-Ziele"/`README.md`) absichtlich nicht im Aufgebot
   enthalten, obwohl die Papiervorlagen sie teils hatten.

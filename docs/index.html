@@ -139,6 +139,14 @@ button{cursor:pointer}
   display:inline-flex;align-items:center;justify-content:center;color:var(--ink-3);flex:none;
 }
 .iconbtn svg{width:17px;height:17px;stroke:currentColor;fill:none;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
+.iconbtn-danger{color:var(--bad);border-color:color-mix(in srgb,var(--bad) 35%,var(--line))}
+
+.formgrid label.f:has(.lockedf-row){flex-basis:100%}
+.lockedf-row{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.lockedf-row:has(.fconfirm) .lockedf-val{flex-basis:100%;order:1}
+.lockedf-val{flex:1;min-width:0;padding:10px 12px;border:1px solid var(--line-2);border-radius:var(--r-s);
+  background:var(--surface-2);color:var(--ink-2);font-size:14.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-height:44px;box-sizing:border-box;display:flex;align-items:center}
+.fconfirm{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:12.5px;color:var(--ink-2);font-weight:600}
 
 label.f{display:flex;flex-direction:column;gap:5px;font-size:13px;font-weight:600;color:var(--ink-2);flex:1;min-width:0}
 input[type=text],input[type=date],input[type=time],input[type=number],select,textarea{
@@ -864,7 +872,8 @@ function newCallupState(matchId){
       opponent: m.opponent || "",
       venueAddress: addr, travelMinutes: ttravel, meetPlace: tmeetPlace, meetTime: tmeetTime,
       squads: squads,
-      guests: ex ? ex.guests.map(function(g){ return {name: g.name, team: g.team}; }) : []
+      guests: ex ? ex.guests.map(function(g){ return {name: g.name, team: g.team}; }) : [],
+      unlocked: {}
     };
   }
   var away = (m.homeAway || "away") === "away";
@@ -882,7 +891,8 @@ function newCallupState(matchId){
     coachIds: ex ? ex.coachIds.slice() : (myCoachId() ? [myCoachId()] : []),
     playerIds: ex ? ex.playerIds.slice() : [],
     keeperId: ex ? (ex.keeperId || "") : "",
-    guests: ex ? ex.guests.map(function(g){ return {name: g.name, team: g.team}; }) : []
+    guests: ex ? ex.guests.map(function(g){ return {name: g.name, team: g.team}; }) : [],
+    unlocked: {}
   };
 }
 function captureCallupStep1(){
@@ -1276,6 +1286,26 @@ function confirmRow(id, text, act, extra){
   return '<span class="row" style="gap:6px"><button class="btn btn-sm btn-danger" data-act="' + act + '" data-id="' + esc(id) + '" ' + (extra || "") + '>' + text + "</button>"
     + '<button class="btn btn-sm btn-ghost" data-act="ask" data-id="">Abbrechen</button></span>';
 }
+// Wie confirmRow(), aber mit ausformulierter Sicherheitsfrage statt Button-Text -
+// fuer einzelne, vorausgefuellte Formularfelder (Aufgebot-Wizard).
+function fieldConfirmRow(id, act, extra){
+  if (UI.confirm !== id) return '<button class="iconbtn iconbtn-danger" data-act="ask" data-id="' + esc(id) + '" title="Löschen" aria-label="Löschen">' + ICON.trash + "</button>";
+  return '<span class="fconfirm">Wirklich löschen?'
+    + '<button class="btn btn-sm btn-danger" data-act="' + act + '" data-id="' + esc(id) + '" ' + (extra || "") + '>Löschen</button>'
+    + '<button class="btn btn-sm btn-ghost" data-act="ask" data-id="">Abbrechen</button></span>';
+}
+// Feld, das vorausgefuellt/vorgeschlagen ist: standardmaessig gesperrt (nur Anzeige),
+// erst nach Antippen des Stifts als Eingabefeld editierbar. deletable=true zeigt
+// zusaetzlich eine rote Muelltonne mit Sicherheitsabfrage (siehe fieldConfirmRow()).
+function lockedField(cw, key, label, value, inputHtml, deletable, delAct, delExtra){
+  var unlocked = cw.unlocked && cw.unlocked[key];
+  if (unlocked) return field("cw-" + key, label, inputHtml);
+  return '<label class="f">' + esc(label) + '<span class="lockedf-row">'
+    + '<span class="lockedf-val">' + esc(value || "–") + '</span>'
+    + '<button class="iconbtn" data-act="cwfieldedit" data-field="' + key + '" title="Bearbeiten" aria-label="Bearbeiten">' + ICON.pen + "</button>"
+    + (deletable ? fieldConfirmRow("cwf-" + key, delAct, delExtra) : "")
+    + "</span></label>";
+}
 
 function adminPeople(kind){
   var isP = kind === "players";
@@ -1448,18 +1478,28 @@ function callupStep1(cw){
   var isT = cw.mode === "tournament";
   var away = isT ? true : cw.homeAway === "away";
   return '<div class="card" style="padding:13px"><div class="formgrid">'
-    + field("cw-opp", isT ? "Turnier-Bezeichnung" : "Gegner", '<input type="text" id="cw-opp" value="' + esc(cw.opponent) + '" placeholder="' + (isT ? "z. B. PMF Turnier in Seuzach" : "z. B. FC Muster c") + '">')
+    + lockedField(cw, "opp", isT ? "Turnier-Bezeichnung" : "Gegner", cw.opponent,
+        '<input type="text" id="cw-opp" value="' + esc(cw.opponent) + '" placeholder="' + (isT ? "z. B. PMF Turnier in Seuzach" : "z. B. FC Muster c") + '">',
+        true, "cwfielddel", 'data-field="opp"')
     + (isT ? "" : field("cw-ha", "Heim / Auswärts", '<select id="cw-ha"><option value="away"' + (away ? " selected" : "") + '>Auswärts</option><option value="home"' + (!away ? " selected" : "") + '>Heim</option></select>'))
     + '</div><div class="formgrid" style="margin-top:10px">'
-    + field("cw-addr", "Sportplatz-Adresse", '<input type="text" id="cw-addr" value="' + esc(cw.venueAddress) + '" placeholder="z. B. Sportanlage Buhwil, Effretikon">')
-    + (away ? field("cw-travel", "Fahrzeit ab Bülach (Minuten)", '<input type="number" min="0" inputmode="numeric" id="cw-travel" value="' + esc(String(cw.travelMinutes || 0)) + '">') : "")
+    + lockedField(cw, "addr", "Sportplatz-Adresse", cw.venueAddress,
+        '<input type="text" id="cw-addr" value="' + esc(cw.venueAddress) + '" placeholder="z. B. Sportanlage Buhwil, Effretikon">',
+        true, "cwfielddel", 'data-field="addr"')
+    + (away ? lockedField(cw, "travel", "Fahrzeit ab Bülach (Minuten)", cw.travelMinutes ? String(cw.travelMinutes) : "",
+        '<input type="number" min="0" inputmode="numeric" id="cw-travel" value="' + esc(String(cw.travelMinutes || 0)) + '">',
+        true, "cwfielddel", 'data-field="travel"') : "")
     + '</div><button class="btn btn-sm" style="margin-top:2px" data-act="cwrecalc">Treffpunkt &amp; -zeit neu vorschlagen</button>'
     + '<div class="formgrid" style="margin-top:12px">'
-    + field("cw-meetplace", "Besammlungsort", '<input type="text" id="cw-meetplace" value="' + esc(cw.meetPlace) + '">')
-    + field("cw-meettime", "Besammlungszeit", '<input type="time" id="cw-meettime" value="' + esc(cw.meetTime) + '">')
+    + lockedField(cw, "meetplace", "Besammlungsort", cw.meetPlace,
+        '<input type="text" id="cw-meetplace" value="' + esc(cw.meetPlace) + '">',
+        true, "cwfielddel", 'data-field="meetplace"')
+    + lockedField(cw, "meettime", "Besammlungszeit", cw.meetTime,
+        '<input type="time" id="cw-meettime" value="' + esc(cw.meetTime) + '">',
+        true, "cwfielddel", 'data-field="meettime"')
     + '</div><p class="small muted" style="margin:8px 0 0">Vorschlag: 1 Stunde vor Anpfiff am Spielort'
     + (away ? " abzüglich Fahrzeit ab Bülach &ndash; Treffpunkt " + (isT ? "" : "bei Auswärtsspielen ") + "ist " + esc(awayMeetPlace()) + "." : ".")
-    + " Beide Felder lassen sich frei anpassen.</p></div>"
+    + " Vorausgefüllte Felder antippen zum Bearbeiten (Stift) oder Löschen (Mülltonne).</p></div>"
     + '<div class="wrap" style="margin-top:14px;justify-content:space-between">'
     + '<button class="btn" data-act="back">Zurück</button>'
     + '<button class="btn btn-primary" data-act="cwnext">Weiter</button></div>';
@@ -1474,7 +1514,9 @@ function callupStepSquads(cw){
     cw.squads.forEach(function(other, j){ if (j !== i) other.playerIds.forEach(function(pid){ usedElsewhere[pid] = true; }); });
     h += '<div class="eyebrow">Team ' + (i + 1) + "</div>"
       + '<div class="card" style="padding:13px"><div class="formgrid">'
-      + field("cw-sqname-" + i, "Name Team " + (i + 1), '<input type="text" id="cw-sqname-' + i + '" value="' + esc(sq.name) + '" placeholder="z. B. Team A">')
+      + lockedField(cw, "sqname-" + i, "Name Team " + (i + 1), sq.name,
+          '<input type="text" id="cw-sqname-' + i + '" value="' + esc(sq.name) + '" placeholder="z. B. Team A">',
+          cw.squads.length > 1, "cwremovesquad", 'data-sq="' + i + '"')
       + "</div></div>";
     h += '<p class="small muted" style="margin:10px 0 8px">Trainer &ndash; mindestens 1, maximal 2</p>';
     h += coaches.length ? '<div class="wrap">' + coaches.map(function(c){
@@ -1493,7 +1535,6 @@ function callupStepSquads(cw){
           + '<button class="tw" data-act="cwsquadgk" data-sq="' + i + '" data-id="' + p.id + '" aria-pressed="' + gk + '"' + (on ? "" : " disabled") + '>TW</button></div>';
       }).join("") + "</div>"
       : '<div class="card empty">Noch keine Spieler erfasst.</div>';
-    if (cw.squads.length > 1) h += '<button class="btn btn-sm" style="margin-top:10px" data-act="cwremovesquad" data-sq="' + i + '">' + esc(sq.name || "Dieses Team") + " entfernen</button>";
     h += '<div style="margin:20px 0;border-top:1px solid var(--line)"></div>';
   });
 
@@ -2024,6 +2065,7 @@ var ACT = {
     if (UI.view === "callup") {
       captureCallupStep1();
       captureSquads();
+      UI.confirm = null;
       if (UI.callup && UI.callup.step > 1) { UI.callup.step -= 1; render(); }
       else { UI.callup = null; UI.adminTab = "callups"; go("admin"); }
       return;
@@ -2260,6 +2302,30 @@ var ACT = {
     var cw = UI.callup; if (!cw) return;
     captureCallupStep1();
     cw.step = Math.min(cw.mode === "tournament" ? 2 : 3, cw.step + 1);
+    UI.confirm = null;
+    render();
+  },
+  cwfieldedit: function(t){
+    var cw = UI.callup; if (!cw) return;
+    // Zuerst noch nicht erfasste Eingaben in ANDEREN bereits entsperrten
+    // Feldern sichern - sonst gingen sie beim Neu-Rendern verloren.
+    captureCallupStep1(); captureSquads();
+    cw.unlocked = cw.unlocked || {};
+    cw.unlocked[t.getAttribute("data-field")] = true;
+    render();
+  },
+  cwfielddel: function(t){
+    var cw = UI.callup; if (!cw) return;
+    captureCallupStep1(); captureSquads();
+    var key = t.getAttribute("data-field");
+    if (key === "opp") cw.opponent = "";
+    else if (key === "addr") cw.venueAddress = "";
+    else if (key === "travel") cw.travelMinutes = 0;
+    else if (key === "meetplace") cw.meetPlace = "";
+    else if (key === "meettime") cw.meetTime = "";
+    cw.unlocked = cw.unlocked || {};
+    cw.unlocked[key] = true;
+    UI.confirm = null;
     render();
   },
   cwaddsquad: function(){
@@ -2274,10 +2340,12 @@ var ACT = {
     captureSquads();
     if (cw.squads.length <= 1) return;
     cw.squads.splice(Number(t.getAttribute("data-sq")), 1);
+    UI.confirm = null;
     render();
   },
   cwsquadcoach: function(t){
     var cw = UI.callup; if (!cw || !cw.squads) return;
+    captureSquads();
     var sq = cw.squads[Number(t.getAttribute("data-sq"))]; if (!sq) return;
     var id = t.getAttribute("data-id");
     var on = sq.coachIds.indexOf(id) >= 0;
@@ -2292,6 +2360,7 @@ var ACT = {
   },
   cwsquadplayer: function(t){
     var cw = UI.callup; if (!cw || !cw.squads) return;
+    captureSquads();
     var i = Number(t.getAttribute("data-sq")); var sq = cw.squads[i]; if (!sq) return;
     var id = t.getAttribute("data-id");
     var elsewhere = cw.squads.some(function(other, j){ return j !== i && other.playerIds.indexOf(id) >= 0; });
@@ -2307,6 +2376,7 @@ var ACT = {
   },
   cwsquadgk: function(t){
     var cw = UI.callup; if (!cw || !cw.squads) return;
+    captureSquads();
     var sq = cw.squads[Number(t.getAttribute("data-sq"))]; if (!sq) return;
     var id = t.getAttribute("data-id");
     if (sq.playerIds.indexOf(id) < 0) return;
@@ -2348,6 +2418,7 @@ var ACT = {
   },
   cwguestadd: function(){
     var cw = UI.callup; if (!cw) return;
+    captureSquads();
     var name = val("cw-gname"), team = val("cw-gteam");
     if (!name) return;
     cw.guests.push({name: name, team: team});
@@ -2355,6 +2426,7 @@ var ACT = {
   },
   cwguestdel: function(t){
     var cw = UI.callup; if (!cw) return;
+    captureSquads();
     cw.guests.splice(Number(t.getAttribute("data-idx")), 1);
     render();
   },
