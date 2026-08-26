@@ -221,7 +221,14 @@ und Server hin- und herwandert und was in `_daten` liegt.
     { "id": "cu-ab12cd", "matchId": "s1",           // Form bei callupMode "match"
       "meetTime": "08:35", "meetPlace": "Militärparkplatz Bülach", "travelMinutes": 25,
       "coachIds": ["c1", "c4"], "playerIds": ["p1", "p2", "…"], "keeperId": "p1",
-      "guests": [{ "name": "Arel", "team": "D9c" }] },
+      "guests": [{ "name": "Arel", "team": "D9c" }],
+      "rows": [                                     // Reihenfolge/Auswahl der Infotabelle im Ausdruck
+        { "key": "notcalled", "kind": "auto" }, { "key": "wann", "kind": "auto" },
+        { "key": "meettime", "kind": "field" }, { "key": "meetplace", "kind": "field" },
+        { "key": "duration", "kind": "auto" }, { "key": "addr", "kind": "field" },
+        { "key": "mitnehmen", "kind": "team" },
+        { "key": "row-x1y2z3", "kind": "custom", "label": "Verpflegung", "value": "Banane, Riegel" }
+      ] },
     { "id": "cu-ef34gh", "matchId": "s2",           // Form bei callupMode "tournament"
       "meetTime": "08:45", "meetPlace": "Militärparkplatz beim Sportplatz Erachfeld", "travelMinutes": 15,
       "squads": [
@@ -367,21 +374,45 @@ werden (Prüfung in `ACT.cwsquadplayer`, `usedElsewhere` in der Anzeige).
   (`activePlayers()` minus aller aufgebotenen Spieler-IDs, quer über alle
   Teams) – kein manuelles Feld, taucht bei beiden Modi auf.
 - **Vorausgefüllte Felder sind gesperrt** (Schritt 1: Gegner/Turnier-
-  Bezeichnung, Adresse, Fahrzeit, Besammlungsort/-zeit; Schritt "Teams":
-  Team-Name) – `lockedField()` zeigt sie nur als Text mit Stift-Symbol
-  (`ACT.cwfieldedit`, setzt `cw.unlocked[key]`) statt als Eingabefeld;
-  erst danach erscheint das echte `<input>`. Die rote Mülltonne
-  (`fieldConfirmRow()`, wiederverwendet `UI.confirm` wie `confirmRow()`)
-  verlangt eine Bestätigung ("Wirklich löschen?"), bevor `ACT.cwfielddel`
-  den Wert leert (bei Team-Namen: `ACT.cwremovesquad` entfernt das ganze
-  Team, nur ab zwei Teams sichtbar). **Wichtig**: Jeder Handler, der
-  während offener Bearbeitung eines Felds neu rendert (`cwsquadcoach`,
-  `cwsquadplayer`, `cwsquadgk`, `cwguestadd/-del`, `cwfieldedit/-del`),
-  muss zuerst `captureCallupStep1()`/`captureSquads()` aufrufen – sonst
-  geht eine gerade getippte, noch nicht übernommene Eingabe in einem
-  ANDEREN bereits entsperrten Feld beim Neuaufbau des DOM verloren
-  (das hätte fast unbemerkt einen Datenverlust verursacht, siehe
-  `tournament_ui.mjs`/`callup_ui.mjs` in den Tests).
+  Bezeichnung, Fahrzeit; Schritt "Teams": Team-Name) – `lockedField()`
+  zeigt sie nur als Text mit Stift-Symbol (`ACT.cwfieldedit`, setzt
+  `cw.unlocked[key]`) statt als Eingabefeld; erst danach erscheint das
+  echte `<input>`. Die rote Mülltonne (`fieldConfirmRow()`, wiederverwendet
+  `UI.confirm` wie `confirmRow()`) verlangt eine Bestätigung ("Wirklich
+  löschen?"), bevor `ACT.cwfielddel` den Wert leert (bei Team-Namen:
+  `ACT.cwremovesquad` entfernt das ganze Team, nur ab zwei Teams sichtbar).
+  **Wichtig**: Jeder Handler, der während offener Bearbeitung eines Felds
+  neu rendert (`cwsquadcoach`, `cwsquadplayer`, `cwsquadgk`,
+  `cwguestadd/-del`, `cwfieldedit/-del`, `cwrowdel`, `cwaddrow`,
+  `rowDragEnd`), muss zuerst `captureCallupStep1()`/`captureSquads()`/
+  `captureCustomRows()` aufrufen – sonst geht eine gerade getippte, noch
+  nicht übernommene Eingabe in einem ANDEREN bereits entsperrten Feld
+  beim Neuaufbau des DOM verloren (das hätte fast unbemerkt einen
+  Datenverlust verursacht, siehe `tournament_ui.mjs`/`callup_ui.mjs` in
+  den Tests).
+- **"Angaben im Aufgebot" sind frei sortierbar und erweiterbar**
+  (`cw.rows`/`cu.rows`, Schritt 1): eine Liste aus `{key, kind}` für die
+  eingebauten Zeilen (`notcalled`/`wann`/`meettime`/`meetplace`/
+  `duration`/`addr`/`mitnehmen`, `INFO_ROW_KIND` legt die Art fest –
+  `"field"` hat einen echten Wert und nutzt `lockedField()`, `"auto"`/
+  `"team"` sind reine Anzeige) plus frei benannte `{key, kind:"custom",
+  label, value}`-Zeilen (`ACT.cwaddrow`). Reihenfolge im Wizard = Reihenfolge
+  im Ausdruck: `viewCallupPrint()` iteriert dieselbe `cu.rows`-Liste statt
+  fest codierter Tabellenzeilen; fehlt `rows` (ältere, vor dieser Funktion
+  gespeicherte Aufgebote), greift `defaultInfoRows()` als Fallback. Löschen
+  einer Zeile (`ACT.cwrowdel`) entfernt sie nur aus der Liste – bei
+  `"field"`-Zeilen bleibt der zugrunde liegende Wert (z. B. `venueAddress`
+  für die Fahrzeit-Berechnung) unangetastet, auch wenn die Zeile selbst
+  nicht mehr gedruckt wird.
+- **Reihenfolge per Ziehen** (`rowDragStart/-Move/-End`, `ROWDRAG`):
+  bewusst kein HTML5-Drag&Drop (auf iOS/Touch unzuverlässig), sondern
+  Pointer Events auf dem Griff-Icon (`data-drag-handle`, delegiert via
+  `document.addEventListener("pointerdown", …)`). Während des Ziehens wird
+  nur per `transform: translateY()` visuell verschoben (Nachbar-Zeilen rutschen
+  passend mit) – `cw.rows` wird erst beim Loslassen tatsächlich umsortiert
+  und einmal neu gerendert. Grund: `render()` ersetzt bei jedem Aufruf das
+  komplette DOM (`innerHTML`); ein Re-Render mitten im Ziehen würde den
+  gehaltenen Knoten (`ROWDRAG.row`) verwaisen lassen.
 - **Keine Trainer-Telefonnummern**: gemäss Datensparsamkeits-Grundsatz (siehe
   Abschnitt "Bewusste Nicht-Ziele"/`README.md`) absichtlich nicht im Aufgebot
   enthalten, obwohl die Papiervorlagen sie teils hatten.

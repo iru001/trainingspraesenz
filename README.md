@@ -96,6 +96,10 @@ statt die Arbeit des anderen zu überschreiben.
   dann ein fester, pro Team einstellbarer Ort) – einmal erfasste Fahrzeiten pro
   Sportplatz werden für spätere Aufgebote automatisch vorgeschlagen
 - «Nicht im Aufgebot» wird automatisch aus dem Kader berechnet und mit aufgeführt
+- Die Angaben im Aufgebot (Wann, Besammlungszeit/-ort, Adresse, Mitnehmen, …) lassen
+  sich per Griff-Symbol frei sortieren und um eigene Zusatzfelder (Bezeichnung +
+  Text) ergänzen oder wieder löschen – die gewählte Reihenfolge erscheint genauso
+  im Ausdruck
 - Ergebnis ist ein fertiges Aufgebot im Look der bisherigen Papier-Vorlage, druckbar
   bzw. als PDF sicherbar wie der Anwesenheitsbericht
 - Bereits erstellte Aufgebote lassen sich jederzeit wieder öffnen und anpassen

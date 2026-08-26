@@ -148,6 +148,15 @@ button{cursor:pointer}
   background:var(--surface-2);color:var(--ink-2);font-size:14.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-height:44px;box-sizing:border-box;display:flex;align-items:center}
 .fconfirm{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:12.5px;color:var(--ink-2);font-weight:600}
 
+.rowlist{display:flex;flex-direction:column;gap:12px}
+.rowdrag{display:flex;align-items:flex-end;gap:8px;touch-action:pan-y}
+.rowdrag > label.f, .rowdrag > .f{flex:1;min-width:0}
+.rowdrag.rowdrag-active{position:relative;z-index:5;opacity:.92}
+.rowhandle{border:1px solid var(--line);background:var(--surface);border-radius:9px;width:36px;height:44px;
+  display:inline-flex;align-items:center;justify-content:center;color:var(--ink-3);flex:none;touch-action:none;cursor:grab}
+.rowhandle svg{width:17px;height:17px;stroke:currentColor;fill:none;stroke-width:1.9;stroke-linecap:round}
+.rowdrag-active .rowhandle{cursor:grabbing;color:var(--ink)}
+
 label.f{display:flex;flex-direction:column;gap:5px;font-size:13px;font-weight:600;color:var(--ink-2);flex:1;min-width:0}
 input[type=text],input[type=date],input[type=time],input[type=number],select,textarea{
   width:100%;background:var(--surface);border:1px solid var(--line-2);border-radius:var(--r-s);
@@ -463,7 +472,8 @@ var ICON = {
   pen:'<svg viewBox="0 0 24 24"><path d="M4 20h4L19 9a2.4 2.4 0 0 0-3.4-3.4L4.6 16.6 4 20z"/></svg>',
   trash:'<svg viewBox="0 0 24 24"><path d="M4 7h16M9 7V4.6h6V7M6.5 7l.8 13h9.4l.8-13"/></svg>',
   arrow:'<svg viewBox="0 0 24 24" style="width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round"><path d="M15 5l-7 7 7 7"/></svg>',
-  plan:'<svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="17" rx="2.5"/><path d="M8 2.6v3M16 2.6v3M4 9.5h16"/><path d="M8.3 14l2 2 4.6-4.8"/></svg>'
+  plan:'<svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="17" rx="2.5"/><path d="M8 2.6v3M16 2.6v3M4 9.5h16"/><path d="M8.3 14l2 2 4.6-4.8"/></svg>',
+  handle:'<svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></svg>'
 };
 
 /* ===================== Zustand ===================== */
@@ -873,6 +883,7 @@ function newCallupState(matchId){
       venueAddress: addr, travelMinutes: ttravel, meetPlace: tmeetPlace, meetTime: tmeetTime,
       squads: squads,
       guests: ex ? ex.guests.map(function(g){ return {name: g.name, team: g.team}; }) : [],
+      rows: (ex && ex.rows && ex.rows.length) ? cloneInfoRows(ex.rows) : defaultInfoRows(),
       unlocked: {}
     };
   }
@@ -892,6 +903,7 @@ function newCallupState(matchId){
     playerIds: ex ? ex.playerIds.slice() : [],
     keeperId: ex ? (ex.keeperId || "") : "",
     guests: ex ? ex.guests.map(function(g){ return {name: g.name, team: g.team}; }) : [],
+    rows: (ex && ex.rows && ex.rows.length) ? cloneInfoRows(ex.rows) : defaultInfoRows(),
     unlocked: {}
   };
 }
@@ -907,6 +919,16 @@ function captureCallupStep1(){
 function captureSquads(){
   var cw = UI.callup; if (!cw || !cw.squads) return;
   cw.squads.forEach(function(sq, i){ if (el("cw-sqname-" + i)) sq.name = val("cw-sqname-" + i); });
+}
+function captureCustomRows(){
+  var cw = UI.callup; if (!cw || !cw.rows) return;
+  cw.rows.forEach(function(r){
+    if (r.kind !== "custom") return;
+    var lEl = document.querySelector('.customlabel[data-rowkey="' + r.key + '"]');
+    var vEl = document.querySelector('.customvalue[data-rowkey="' + r.key + '"]');
+    if (lEl) r.label = lEl.value.trim();
+    if (vEl) r.value = vEl.value.trim();
+  });
 }
 function planOccurrences(){
   return plannedOccurrences(todayISO(), seasonTo())
@@ -1307,6 +1329,72 @@ function lockedField(cw, key, label, value, inputHtml, deletable, delAct, delExt
     + "</span></label>";
 }
 
+/* ===================== Aufgebot: Reihenfolge der Angaben ===================== */
+// Die "Angaben im Aufgebot" (Infotabelle im Ausdruck) sind eine frei sortierbare
+// und um Zusatzfelder erweiterbare Liste (cw.rows/cu.rows) - dieselbe Reihenfolge
+// gilt im Wizard wie im Ausdruck. "field"-Zeilen haben einen echten, editierbaren
+// Wert (siehe lockedField); "auto"/"team"-Zeilen sind reine Anzeige (berechnet
+// bzw. aus den Team-Einstellungen); "custom"-Zeilen sind frei benannter Freitext.
+var DEFAULT_INFO_ROWS = ["notcalled", "wann", "meettime", "meetplace", "duration", "addr", "mitnehmen"];
+var INFO_ROW_KIND = {notcalled: "auto", wann: "auto", meettime: "field", meetplace: "field", duration: "auto", addr: "field", mitnehmen: "team"};
+function defaultInfoRows(){ return DEFAULT_INFO_ROWS.map(function(k){ return {key: k, kind: INFO_ROW_KIND[k]}; }); }
+function cloneInfoRows(rows){
+  return rows.map(function(r){
+    return r.kind === "custom" ? {key: r.key, kind: "custom", label: r.label || "", value: r.value || ""} : {key: r.key, kind: r.kind || INFO_ROW_KIND[r.key] || "auto"};
+  });
+}
+function infoRowLabel(key, isT){
+  return key === "notcalled" ? "Nicht im Aufgebot"
+    : key === "wann" ? "Wann"
+    : key === "meettime" ? "Besammlungszeit"
+    : key === "meetplace" ? "Besammlungsort"
+    : key === "duration" ? (isT ? "Turnierzeit" : "Spieldauer")
+    : key === "addr" ? "Adresse Sportplatz"
+    : key === "mitnehmen" ? "Mitnehmen"
+    : "";
+}
+// Anzeige-Vorschau fuer "auto"/"team"-Zeilen im Wizard (nur Text, nicht editierbar).
+function callupRowPreview(cw, m, key){
+  var isT = cw.mode === "tournament";
+  if (key === "notcalled") {
+    var ids = isT ? (cw.squads || []).reduce(function(a, sq){ return a.concat(sq.playerIds); }, []) : (cw.playerIds || []);
+    if (!ids.length) return "(wird nach Auswahl der Spieler berechnet)";
+    var names = activePlayers().filter(function(p){ return ids.indexOf(p.id) < 0; }).map(fullName);
+    return names.length ? names.join(", ") : "–";
+  }
+  if (key === "wann") return m.date ? fmtDate(m.date) : "–";
+  if (key === "duration") return timeRange(m) || "–";
+  if (key === "mitnehmen") return DB.settings.callupNotes || CALLUP_NOTES_DEFAULT;
+  return "";
+}
+function renderInfoRows(cw, m){
+  var isT = cw.mode === "tournament";
+  var h = cw.rows.map(function(row){
+    var key = row.key, kind = row.kind, label = kind === "custom" ? "" : infoRowLabel(key, isT), inner;
+    if (kind === "custom") {
+      inner = '<div class="f" style="flex:1;min-width:0">'
+        + '<input type="text" class="customlabel" data-rowkey="' + esc(key) + '" value="' + esc(row.label) + '" placeholder="Bezeichnung, z. B. Verpflegung">'
+        + '<input type="text" class="customvalue" data-rowkey="' + esc(key) + '" value="' + esc(row.value) + '" placeholder="Wert" style="margin-top:6px">'
+        + "</div>" + fieldConfirmRow("cwf-" + key, "cwrowdel", 'data-rowkey="' + esc(key) + '"');
+    } else if (kind === "field") {
+      var val = key === "meettime" ? cw.meetTime : key === "meetplace" ? cw.meetPlace : cw.venueAddress;
+      var inputHtml = key === "meettime"
+        ? '<input type="time" id="cw-' + key + '" value="' + esc(val) + '">'
+        : '<input type="text" id="cw-' + key + '" value="' + esc(val) + '">';
+      inner = lockedField(cw, key, label, val, inputHtml, true, "cwrowdel", 'data-rowkey="' + key + '"');
+    } else {
+      inner = '<label class="f">' + esc(label) + '<span class="lockedf-row">'
+        + '<span class="lockedf-val">' + esc(callupRowPreview(cw, m, key) || "–") + '</span>'
+        + fieldConfirmRow("cwf-" + key, "cwrowdel", 'data-rowkey="' + esc(key) + '"')
+        + "</span></label>";
+    }
+    return '<div class="rowdrag" data-rowkey="' + esc(key) + '">' + inner
+      + '<button class="rowhandle" data-drag-handle title="Reihenfolge ändern (halten und ziehen)" aria-label="Reihenfolge ändern">' + ICON.handle + "</button></div>";
+  }).join("");
+  return '<div class="rowlist">' + h + '</div>'
+    + '<button class="btn btn-sm" style="margin-top:10px" data-act="cwaddrow">+ Zusatzfeld hinzufügen</button>';
+}
+
 function adminPeople(kind){
   var isP = kind === "players";
   var list = (isP ? DB.players : DB.coaches).slice().sort(sortName);
@@ -1477,32 +1565,34 @@ function viewCallupWizard(){
 function callupStep1(cw){
   var isT = cw.mode === "tournament";
   var away = isT ? true : cw.homeAway === "away";
-  return '<div class="card" style="padding:13px"><div class="formgrid">'
+  var h = '<div class="card" style="padding:13px">';
+  h += '<div class="formgrid">'
     + lockedField(cw, "opp", isT ? "Turnier-Bezeichnung" : "Gegner", cw.opponent,
         '<input type="text" id="cw-opp" value="' + esc(cw.opponent) + '" placeholder="' + (isT ? "z. B. PMF Turnier in Seuzach" : "z. B. FC Muster c") + '">',
         true, "cwfielddel", 'data-field="opp"')
     + (isT ? "" : field("cw-ha", "Heim / Auswärts", '<select id="cw-ha"><option value="away"' + (away ? " selected" : "") + '>Auswärts</option><option value="home"' + (!away ? " selected" : "") + '>Heim</option></select>'))
-    + '</div><div class="formgrid" style="margin-top:10px">'
-    + lockedField(cw, "addr", "Sportplatz-Adresse", cw.venueAddress,
-        '<input type="text" id="cw-addr" value="' + esc(cw.venueAddress) + '" placeholder="z. B. Sportanlage Buhwil, Effretikon">',
-        true, "cwfielddel", 'data-field="addr"')
-    + (away ? lockedField(cw, "travel", "Fahrzeit ab Bülach (Minuten)", cw.travelMinutes ? String(cw.travelMinutes) : "",
-        '<input type="number" min="0" inputmode="numeric" id="cw-travel" value="' + esc(String(cw.travelMinutes || 0)) + '">',
-        true, "cwfielddel", 'data-field="travel"') : "")
-    + '</div><button class="btn btn-sm" style="margin-top:2px" data-act="cwrecalc">Treffpunkt &amp; -zeit neu vorschlagen</button>'
-    + '<div class="formgrid" style="margin-top:12px">'
-    + lockedField(cw, "meetplace", "Besammlungsort", cw.meetPlace,
-        '<input type="text" id="cw-meetplace" value="' + esc(cw.meetPlace) + '">',
-        true, "cwfielddel", 'data-field="meetplace"')
-    + lockedField(cw, "meettime", "Besammlungszeit", cw.meetTime,
-        '<input type="time" id="cw-meettime" value="' + esc(cw.meetTime) + '">',
-        true, "cwfielddel", 'data-field="meettime"')
-    + '</div><p class="small muted" style="margin:8px 0 0">Vorschlag: 1 Stunde vor Anpfiff am Spielort'
+    + "</div>";
+  if (away) {
+    h += '<div class="formgrid" style="margin-top:10px">'
+      + lockedField(cw, "travel", "Fahrzeit ab Bülach (Minuten)", cw.travelMinutes ? String(cw.travelMinutes) : "",
+          '<input type="number" min="0" inputmode="numeric" id="cw-travel" value="' + esc(String(cw.travelMinutes || 0)) + '">',
+          true, "cwfielddel", 'data-field="travel"')
+      + "</div>";
+  }
+  h += '<button class="btn btn-sm" style="margin-top:2px" data-act="cwrecalc">Treffpunkt &amp; -zeit neu vorschlagen</button>'
+    + '<p class="small muted" style="margin:8px 0 0">Vorschlag: 1 Stunde vor Anpfiff am Spielort'
     + (away ? " abzüglich Fahrzeit ab Bülach &ndash; Treffpunkt " + (isT ? "" : "bei Auswärtsspielen ") + "ist " + esc(awayMeetPlace()) + "." : ".")
-    + " Vorausgefüllte Felder antippen zum Bearbeiten (Stift) oder Löschen (Mülltonne).</p></div>"
-    + '<div class="wrap" style="margin-top:14px;justify-content:space-between">'
+    + " Vorausgefüllte Felder antippen zum Bearbeiten (Stift) oder Löschen (Mülltonne).</p></div>";
+
+  var m = byId(DB.singles, cw.matchId) || {};
+  h += '<div class="eyebrow">Angaben im Aufgebot</div>'
+    + '<p class="small muted" style="margin:-4px 0 10px">Reihenfolge per Griff (☰) rechts anpassen &ndash; so erscheinen die Angaben auch im gedruckten Aufgebot.</p>'
+    + renderInfoRows(cw, m);
+
+  h += '<div class="wrap" style="margin-top:14px;justify-content:space-between">'
     + '<button class="btn" data-act="back">Zurück</button>'
     + '<button class="btn btn-primary" data-act="cwnext">Weiter</button></div>';
+  return h;
 }
 
 function callupStepSquads(cw){
@@ -1654,15 +1744,19 @@ function viewCallupPrint(){
     h += '<div class="ca-lbl" style="margin-bottom:6px">Aufgebot für:</div><ol>' + names.map(function(n){ return "<li>" + esc(n) + "</li>"; }).join("") + "</ol>";
   }
 
-  h += "<table>";
-  if (notCalledUp.length) h += "<tr><td>Nicht im Aufgebot:</td><td>" + esc(notCalledUp.join(", ")) + "</td></tr>";
-  h += "<tr><td>Wann:</td><td><span class=\"ca-hi\">" + esc(fmtDate(m.date)) + "</span></td></tr>"
-    + "<tr><td>Besammlungszeit:</td><td>" + esc(cu.meetTime ? cu.meetTime + " Uhr" : "–") + "</td></tr>"
-    + "<tr><td>Besammlungsort:</td><td>" + esc(cu.meetPlace || "–") + "</td></tr>"
-    + "<tr><td>" + (isT ? "Turnierzeit" : "Spieldauer") + ":</td><td>" + esc(timeRange(m) || "–") + "</td></tr>"
-    + "<tr><td>Adresse Sportplatz:</td><td>" + (addr ? esc(addr) + (mapsUrl ? ' (<a class="maplink" href="' + esc(mapsUrl) + '" target="_blank" rel="noopener">Google Maps</a>)' : "") : "–") + "</td></tr>"
-    + "<tr><td>Mitnehmen:</td><td>" + esc(notes) + "</td></tr>"
-    + "</table>";
+  var infoRows = (cu.rows && cu.rows.length) ? cu.rows : defaultInfoRows();
+  h += "<table>" + infoRows.map(function(row){
+    if (row.kind === "custom") return (row.label || row.value) ? "<tr><td>" + esc(row.label) + ":</td><td>" + esc(row.value) + "</td></tr>" : "";
+    var key = row.key;
+    if (key === "notcalled") return notCalledUp.length ? "<tr><td>Nicht im Aufgebot:</td><td>" + esc(notCalledUp.join(", ")) + "</td></tr>" : "";
+    if (key === "wann") return "<tr><td>Wann:</td><td><span class=\"ca-hi\">" + esc(fmtDate(m.date)) + "</span></td></tr>";
+    if (key === "meettime") return "<tr><td>Besammlungszeit:</td><td>" + esc(cu.meetTime ? cu.meetTime + " Uhr" : "–") + "</td></tr>";
+    if (key === "meetplace") return "<tr><td>Besammlungsort:</td><td>" + esc(cu.meetPlace || "–") + "</td></tr>";
+    if (key === "duration") return "<tr><td>" + (isT ? "Turnierzeit" : "Spieldauer") + ":</td><td>" + esc(timeRange(m) || "–") + "</td></tr>";
+    if (key === "addr") return "<tr><td>Adresse Sportplatz:</td><td>" + (addr ? esc(addr) + (mapsUrl ? ' (<a class="maplink" href="' + esc(mapsUrl) + '" target="_blank" rel="noopener">Google Maps</a>)' : "") : "–") + "</td></tr>";
+    if (key === "mitnehmen") return "<tr><td>Mitnehmen:</td><td>" + esc(notes) + "</td></tr>";
+    return "";
+  }).join("") + "</table>";
 
   var coachLine;
   if (isT) {
@@ -2042,6 +2136,68 @@ document.addEventListener("keydown", function(ev){
   }
 });
 
+/* ===================== Aufgebot: Reihenfolge per Griff ziehen ===================== */
+// Einfacher, abhaengigkeitsfreier Drag-Reorder fuer die "Angaben im Aufgebot"-Liste.
+// Kein HTML5-Drag&Drop (auf iOS/Touch unzuverlaessig) - stattdessen Pointer Events:
+// Nachbar-Zeilen werden waehrend des Ziehens per transform visuell verschoben, erst
+// beim Loslassen wird cw.rows tatsaechlich umsortiert und einmal neu gerendert.
+var ROWDRAG = null;
+document.addEventListener("pointerdown", function(ev){
+  var t = ev.target.closest("[data-drag-handle]");
+  if (t) rowDragStart(ev, t);
+});
+function rowDragStart(ev, handle){
+  var cw = UI.callup; if (!cw || !cw.rows) return;
+  var row = handle.closest(".rowdrag");
+  if (!row) return;
+  var list = row.parentElement;
+  var items = Array.prototype.slice.call(list.querySelectorAll(":scope > .rowdrag"));
+  var index = items.indexOf(row);
+  if (index < 0) return;
+  ev.preventDefault();
+  try { handle.setPointerCapture(ev.pointerId); } catch(e){}
+  var rect = row.getBoundingClientRect();
+  ROWDRAG = {cw: cw, fromIndex: index, toIndex: index, startY: ev.clientY, row: row, items: items, itemH: rect.height || 44};
+  row.classList.add("rowdrag-active");
+  document.addEventListener("pointermove", rowDragMove);
+  document.addEventListener("pointerup", rowDragEnd);
+  document.addEventListener("pointercancel", rowDragEnd);
+}
+function rowDragMove(ev){
+  if (!ROWDRAG) return;
+  ev.preventDefault();
+  var dy = ev.clientY - ROWDRAG.startY;
+  ROWDRAG.row.style.transform = "translateY(" + dy + "px)";
+  var steps = Math.round(dy / ROWDRAG.itemH);
+  var idx = Math.max(0, Math.min(ROWDRAG.items.length - 1, ROWDRAG.fromIndex + steps));
+  if (idx !== ROWDRAG.toIndex) {
+    ROWDRAG.toIndex = idx;
+    ROWDRAG.items.forEach(function(it, i){
+      if (it === ROWDRAG.row) return;
+      var shift = 0;
+      if (ROWDRAG.fromIndex < idx && i > ROWDRAG.fromIndex && i <= idx) shift = -1;
+      else if (ROWDRAG.fromIndex > idx && i < ROWDRAG.fromIndex && i >= idx) shift = 1;
+      it.style.transition = "transform .12s ease";
+      it.style.transform = shift ? "translateY(" + (shift * ROWDRAG.itemH) + "px)" : "";
+    });
+  }
+}
+function rowDragEnd(){
+  if (!ROWDRAG) return;
+  var cw = ROWDRAG.cw;
+  captureCallupStep1(); captureCustomRows();
+  if (ROWDRAG.toIndex !== ROWDRAG.fromIndex) {
+    var item = cw.rows.splice(ROWDRAG.fromIndex, 1)[0];
+    cw.rows.splice(ROWDRAG.toIndex, 0, item);
+  }
+  ROWDRAG.items.forEach(function(it){ it.style.transition = ""; it.style.transform = ""; it.classList.remove("rowdrag-active"); });
+  ROWDRAG = null;
+  document.removeEventListener("pointermove", rowDragMove);
+  document.removeEventListener("pointerup", rowDragEnd);
+  document.removeEventListener("pointercancel", rowDragEnd);
+  render();
+}
+
 function updateSheet(){
   var st = UI.state;
   document.querySelectorAll(".plist li").forEach(function(li){
@@ -2065,6 +2221,7 @@ var ACT = {
     if (UI.view === "callup") {
       captureCallupStep1();
       captureSquads();
+      captureCustomRows();
       UI.confirm = null;
       if (UI.callup && UI.callup.step > 1) { UI.callup.step -= 1; render(); }
       else { UI.callup = null; UI.adminTab = "callups"; go("admin"); }
@@ -2291,7 +2448,7 @@ var ACT = {
   },
   cwrecalc: function(){
     var cw = UI.callup; if (!cw) return;
-    captureCallupStep1();
+    captureCallupStep1(); captureCustomRows();
     var m = byId(DB.singles, cw.matchId);
     var away = cw.mode === "tournament" ? true : cw.homeAway === "away";
     cw.meetPlace = away ? awayMeetPlace() : cw.venueAddress;
@@ -2300,7 +2457,7 @@ var ACT = {
   },
   cwnext: function(){
     var cw = UI.callup; if (!cw) return;
-    captureCallupStep1();
+    captureCallupStep1(); captureCustomRows();
     cw.step = Math.min(cw.mode === "tournament" ? 2 : 3, cw.step + 1);
     UI.confirm = null;
     render();
@@ -2309,23 +2466,34 @@ var ACT = {
     var cw = UI.callup; if (!cw) return;
     // Zuerst noch nicht erfasste Eingaben in ANDEREN bereits entsperrten
     // Feldern sichern - sonst gingen sie beim Neu-Rendern verloren.
-    captureCallupStep1(); captureSquads();
+    captureCallupStep1(); captureSquads(); captureCustomRows();
     cw.unlocked = cw.unlocked || {};
     cw.unlocked[t.getAttribute("data-field")] = true;
     render();
   },
   cwfielddel: function(t){
     var cw = UI.callup; if (!cw) return;
-    captureCallupStep1(); captureSquads();
+    captureCallupStep1(); captureSquads(); captureCustomRows();
     var key = t.getAttribute("data-field");
     if (key === "opp") cw.opponent = "";
-    else if (key === "addr") cw.venueAddress = "";
     else if (key === "travel") cw.travelMinutes = 0;
-    else if (key === "meetplace") cw.meetPlace = "";
-    else if (key === "meettime") cw.meetTime = "";
     cw.unlocked = cw.unlocked || {};
     cw.unlocked[key] = true;
     UI.confirm = null;
+    render();
+  },
+  cwrowdel: function(t){
+    var cw = UI.callup; if (!cw || !cw.rows) return;
+    captureCallupStep1(); captureCustomRows();
+    var key = t.getAttribute("data-rowkey");
+    cw.rows = cw.rows.filter(function(r){ return r.key !== key; });
+    UI.confirm = null;
+    render();
+  },
+  cwaddrow: function(){
+    var cw = UI.callup; if (!cw || !cw.rows) return;
+    captureCallupStep1(); captureCustomRows();
+    cw.rows.push({key: uid("row"), kind: "custom", label: "", value: ""});
     render();
   },
   cwaddsquad: function(){
@@ -2444,14 +2612,15 @@ var ACT = {
       if (!cw.coachIds.length) { toast("Bitte mindestens einen Trainer wählen."); return; }
       if (!cw.playerIds.length) { toast("Bitte mindestens einen Spieler wählen."); return; }
     }
+    var rows = cloneInfoRows(cw.rows);
     var payload = isT ? {
       opponent: cw.opponent, venueAddress: cw.venueAddress, travelMinutes: cw.travelMinutes,
-      meetPlace: cw.meetPlace, meetTime: cw.meetTime,
+      meetPlace: cw.meetPlace, meetTime: cw.meetTime, rows: rows,
       squads: cw.squads.map(function(sq){ return {name: sq.name, coachIds: sq.coachIds.slice(), playerIds: sq.playerIds.slice(), keeperId: sq.keeperId}; }),
       guests: cw.guests.map(function(g){ return {name: g.name, team: g.team}; })
     } : {
       opponent: cw.opponent, homeAway: cw.homeAway, venueAddress: cw.venueAddress,
-      travelMinutes: cw.travelMinutes, meetPlace: cw.meetPlace, meetTime: cw.meetTime,
+      travelMinutes: cw.travelMinutes, meetPlace: cw.meetPlace, meetTime: cw.meetTime, rows: rows,
       coachIds: cw.coachIds.slice(), playerIds: cw.playerIds.slice(), keeperId: cw.keeperId,
       guests: cw.guests.map(function(g){ return {name: g.name, team: g.team}; })
     };
@@ -2470,8 +2639,8 @@ var ACT = {
       }
       var existing = db.callups.filter(function(c){ return c.matchId === matchId; })[0];
       var fields = isT
-        ? {meetPlace: payload.meetPlace, meetTime: payload.meetTime, travelMinutes: payload.travelMinutes, squads: payload.squads, guests: payload.guests}
-        : {meetPlace: payload.meetPlace, meetTime: payload.meetTime, travelMinutes: payload.travelMinutes,
+        ? {meetPlace: payload.meetPlace, meetTime: payload.meetTime, travelMinutes: payload.travelMinutes, rows: payload.rows, squads: payload.squads, guests: payload.guests}
+        : {meetPlace: payload.meetPlace, meetTime: payload.meetTime, travelMinutes: payload.travelMinutes, rows: payload.rows,
            coachIds: payload.coachIds, playerIds: payload.playerIds, keeperId: payload.keeperId, guests: payload.guests};
       if (existing) {
         delete existing.squads; delete existing.coachIds; delete existing.playerIds; delete existing.keeperId;
