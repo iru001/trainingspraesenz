@@ -174,7 +174,9 @@ und Server hin- und herwandert und was in `_daten` liegt.
     "pin": "••••••",         // NUR client-/transportseitig; im Blatt immer ""
     "adminPin": "••••",      //   (Quelle der Wahrheit: Skript-Eigenschaften)
     "callupNotes": "",       // Aufgebot: Text unter "Mitnehmen", leer = Standardtext
-    "callupCancelHint": ""   // Aufgebot: Text unter "Abmeldungen/Verspätungen", leer = Standardtext
+    "callupCancelHint": "",  // Aufgebot: Text unter "Abmeldungen/Verspätungen", leer = Standardtext
+    "callupMode": "match",   // "match" (ein Gegner) oder "tournament" (1-2 Teams), siehe Abschnitt 4a
+    "awayMeetPlace": ""      // Aufgebot: fixer Treffpunkt auswärts/Turnier, leer = "Militärparkplatz Bülach"
   },
   "coaches": [
     { "id": "c1", "first": "Max", "last": "M.", "role": "Trainer", "active": true }
@@ -216,10 +218,17 @@ und Server hin- und herwandert und was in `_daten` liegt.
     { "address": "Sportanlage Buhwil, Effretikon", "travelMinutes": 25 }
   ],
   "callups": [                 // Aufgebote, siehe Abschnitt 4a
-    { "id": "cu-ab12cd", "matchId": "s1",
+    { "id": "cu-ab12cd", "matchId": "s1",           // Form bei callupMode "match"
       "meetTime": "08:35", "meetPlace": "Militärparkplatz Bülach", "travelMinutes": 25,
       "coachIds": ["c1", "c4"], "playerIds": ["p1", "p2", "…"], "keeperId": "p1",
-      "guests": [{ "name": "Arel", "team": "D9c" }] }
+      "guests": [{ "name": "Arel", "team": "D9c" }] },
+    { "id": "cu-ef34gh", "matchId": "s2",           // Form bei callupMode "tournament"
+      "meetTime": "08:45", "meetPlace": "Militärparkplatz beim Sportplatz Erachfeld", "travelMinutes": 15,
+      "squads": [
+        { "name": "Team A", "coachIds": ["c1"], "playerIds": ["p1", "…"], "keeperId": "p1" },
+        { "name": "Team B", "coachIds": ["c2"], "playerIds": ["p7", "…"], "keeperId": "" }
+      ],
+      "guests": [] }
   ]
 }
 ```
@@ -305,20 +314,38 @@ Geburtsdaten idempotent gemacht. Neue Migrationen gehören ebenfalls hierhin.
 ## 4a. Aufgebot
 
 Admin-Funktion, mit der ein Trainer für einen Wettkampftag ein druckbares
-Spielaufgebot erstellt (Treffpunkt, Trainer, bis zu 14 Spieler) – Ersatz für das
-bisher manuell in Word gepflegte Dokument.
+Spielaufgebot erstellt – Ersatz für das bisher manuell in Word gepflegte
+Dokument. Zwei Team-Vorlagen, gesteuert über `settings.callupMode`:
+
+- **`"match"`** (Default, z. B. D9b): ein Gegner, Heim/Auswärts, EIN Kader mit
+  1–2 Trainern und bis zu 14 Spielern.
+- **`"tournament"`** (z. B. FA 2018): kein fester Gegner (stattdessen freie
+  Turnier-Bezeichnung), immer "auswärts"-artig (fixer Treffpunkt +
+  Fahrzeit-Abzug), dafür ein oder zwei eigenständige Teams (`squads`), je mit
+  eigenem Namen, 1–2 Trainern und beliebig vielen Spielern (kein 14er-Deckel –
+  der gilt nur für `"match"`, siehe FA-Vorlage mit 6–7 Spielern pro Team).
+
+`callupMode(cw.mode)` läuft durch die ganze Kette: `newCallupState()` liefert
+je nach Modus eine flache Struktur (`coachIds`/`playerIds`/`keeperId`) oder
+`squads: [{name, coachIds, playerIds, keeperId}]`; `viewCallupWizard()` zeigt
+entsprechend 3 Schritte (Treffpunkt/Trainer/Spieler) oder 2
+(Treffpunkt/Teams, `callupStepSquads()`); `ACT.cwsave` schreibt dieselbe Form
+in `DB.callups[]`. Ein Spieler kann nicht gleichzeitig in zwei Teams gewählt
+werden (Prüfung in `ACT.cwsquadplayer`, `usedElsewhere` in der Anzeige).
 
 - **Ablauf**: `adminCallups()` listet alle `singles` mit `type === "match"`;
   Antippen öffnet `viewCallupWizard()` mit `UI.callup` (Entwurf, nur im
-  Speicher, nicht Teil von `DB`) für genau drei Schritte – Treffpunkt, Trainer,
-  Spieler. `ACT.cwsave` schreibt Entwurf → `DB.singles[].{opponent,homeAway,
-  venueAddress}` und `DB.callups[]` in einem `commit()`, danach Sprung zu
-  `viewCallupPrint()` (druckbare Ansicht, `data-act="print"` wie beim
-  bestehenden Bericht via `window.print()`).
+  Speicher, nicht Teil von `DB`). `ACT.cwsave` schreibt Entwurf → `DB.singles[]
+  .{opponent,homeAway,venueAddress}` (`homeAway` nur bei `"match"`) und
+  `DB.callups[]` in einem `commit()`, danach Sprung zu `viewCallupPrint()`
+  (druckbare Ansicht, `data-act="print"` wie beim bestehenden Bericht via
+  `window.print()`).
 - **Treffpunkt-Vorschlag** (`proposeMeetTime()`): 1 Stunde vor Anpfiff am
-  Spielort; bei Auswärtsspielen zusätzlich abzüglich der Fahrzeit ab Bülach,
-  Treffpunkt dann fix "Militärparkplatz Bülach" statt der Spielortadresse.
-  Beide Vorschläge sind frei überschreibbar (`cw-meetplace`/`cw-meettime`).
+  Spielort; bei Auswärtsspielen (bzw. immer im Turnier-Modus) zusätzlich
+  abzüglich der Fahrzeit ab Bülach, Treffpunkt dann fix `awayMeetPlace()`
+  (= `settings.awayMeetPlace`, sonst Standardtext "Militärparkplatz Bülach")
+  statt der Spielortadresse. Beide Vorschläge sind frei überschreibbar
+  (`cw-meetplace`/`cw-meettime`).
 - **Fahrzeit-Wiederverwendung**: `DB.venues` speichert die Fahrzeit einmalig
   pro Adresse (`venueFor()`, Vergleich getrimmt/kleingeschrieben); `cwsave`
   legt einen Eintrag an oder aktualisiert ihn. Bewusst KEINE
@@ -326,17 +353,22 @@ bisher manuell in Word gepflegte Dokument.
 - **Ein Wettkampftag hat höchstens ein Aufgebot** (`callupForMatch()` sucht
   per `matchId`, `cwsave` überschreibt ein bestehendes statt ein zweites
   anzulegen) – dadurch ist ein Aufgebot jederzeit nachträglich anpassbar,
-  ohne Duplikate zu erzeugen.
-- **`keeperId`**: markiert den Torhüter NUR für dieses eine Aufgebot (nicht am
-  Spieler selbst) – dieselbe Person kann im nächsten Aufgebot ohne
+  ohne Duplikate zu erzeugen. Wechselt `callupMode` nachträglich, räumt
+  `cwsave` die Felder der jeweils anderen Form ab (kein Mischzustand).
+- **`keeperId`**: markiert den Torhüter NUR für dieses eine Aufgebot bzw. Team
+  (nicht am Spieler selbst) – dieselbe Person kann im nächsten Aufgebot ohne
   Sonderbehandlung wieder als Feldspieler erscheinen.
 - **`guests`**: Freitext (Name + optional Team), für Spieler aus anderen
   Teams, die punktuell aushelfen – bewusst kein Verweis auf `players`, da sie
   nicht zum eigenen Kader gehören und keine eigene Anwesenheitsstatistik
-  benötigen.
+  benötigen. Bei `"tournament"` erscheinen sie in der Druckansicht beim
+  ersten Team.
+- **"Nicht im Aufgebot"** in der Druckansicht: automatisch berechnet
+  (`activePlayers()` minus aller aufgebotenen Spieler-IDs, quer über alle
+  Teams) – kein manuelles Feld, taucht bei beiden Modi auf.
 - **Keine Trainer-Telefonnummern**: gemäss Datensparsamkeits-Grundsatz (siehe
   Abschnitt "Bewusste Nicht-Ziele"/`README.md`) absichtlich nicht im Aufgebot
-  enthalten, obwohl die Papiervorlage sie hatte.
+  enthalten, obwohl die Papiervorlagen sie teils hatten.
 - **Logo**: kommt aus `TEAM.logo` (`docs/config.js`, optional, data-URI) –
   NICHT Teil des Datenbestands, da es sich nicht pro Speicherung ändert und
   sonst bei jeder Anfrage mitübertragen würde.

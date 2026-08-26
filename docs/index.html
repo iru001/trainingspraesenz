@@ -181,8 +181,8 @@ button.item:first-child{border-top:0}
 .capaper .ca-logo{width:100px;flex:none}
 .capaper .ca-logo img{width:100%;display:block}
 .capaper .ca-lbl{font-weight:700}
-.capaper ol{margin:8px 0 20px;padding-left:24px}
-.capaper ol li{margin-bottom:4px}
+.capaper ol,.capaper ul{margin:8px 0 20px;padding-left:24px}
+.capaper ol li,.capaper ul li{margin-bottom:4px}
 .capaper table{border-collapse:separate;border-spacing:0;width:100%;margin-bottom:14px}
 .capaper table td{padding:9px 14px 9px 0;vertical-align:top;border-bottom:1px solid #e5e5e5}
 .capaper table tr:last-child td{border-bottom:0}
@@ -443,6 +443,9 @@ var SK = {}; STATUS.forEach(function(s){ SK[s.k] = s; });
 function abFor(st){ return st === "na" ? "NA" : (SK[st] ? SK[st].ab : ""); }
 var CALLUP_NOTES_DEFAULT = "Trikot, Fussballschuhe (Nocken/Tausendfüssler), Schienbeinschoner, Torwarthandschuhe (wer hat), Wasserflasche. Wertsachen bleiben zu Hause – die Trainer tragen keine Verantwortung.";
 var CALLUP_CANCEL_DEFAULT = "Bitte umgehend im Gruppen-Chat informieren.";
+var CALLUP_MEETPLACE_DEFAULT = "Militärparkplatz Bülach";
+function callupMode(){ return DB.settings.callupMode === "tournament" ? "tournament" : "match"; }
+function awayMeetPlace(){ return DB.settings.awayMeetPlace || CALLUP_MEETPLACE_DEFAULT; }
 var ICON = {
   cal:'<svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>',
   chart:'<svg viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>',
@@ -482,7 +485,8 @@ function normalize(d){
   if (!d || typeof d !== "object") d = {};
   d.v = 1;
   d.settings = d.settings || {};
-  ["team","season","seasonStart","seasonEnd","pin","adminPin","callupNotes","callupCancelHint"].forEach(function(k){ d.settings[k] = d.settings[k] || ""; });
+  ["team","season","seasonStart","seasonEnd","pin","adminPin","callupNotes","callupCancelHint","awayMeetPlace"].forEach(function(k){ d.settings[k] = d.settings[k] || ""; });
+  d.settings.callupMode = d.settings.callupMode === "tournament" ? "tournament" : "match";
   ["coaches","players","rules","singles","records","venues","callups"].forEach(function(k){ if (!Array.isArray(d[k])) d[k] = []; });
   d.players.forEach(function(p){ delete p.birth; });   // Geburtsdaten werden bewusst nicht gespeichert
   if (!d.availability || typeof d.availability !== "object" || Array.isArray(d.availability)) d.availability = {};
@@ -843,16 +847,32 @@ function proposeMeetTime(kickoff, homeAway, travelMinutes){
   return subtractMinutes(kickoff, 60 + (homeAway === "away" ? (Number(travelMinutes) || 0) : 0));
 }
 function newCallupState(matchId){
+  var mode = callupMode();
   var m = byId(DB.singles, matchId) || {};
   var ex = callupForMatch(matchId);
-  var away = (m.homeAway || "away") === "away";
   var addr = m.venueAddress || "";
   var v = venueFor(addr);
+  if (mode === "tournament") {
+    var ttravel = ex ? (ex.travelMinutes || 0) : (v ? v.travelMinutes : 0);
+    var tmeetPlace = ex ? ex.meetPlace : awayMeetPlace();
+    var tmeetTime = ex ? ex.meetTime : (m.time ? proposeMeetTime(m.time, "away", ttravel) : "");
+    var squads = (ex && ex.squads && ex.squads.length) ? ex.squads.map(function(sq){
+      return {name: sq.name || "", coachIds: (sq.coachIds || []).slice(), playerIds: (sq.playerIds || []).slice(), keeperId: sq.keeperId || ""};
+    }) : [{name: "Team A", coachIds: myCoachId() ? [myCoachId()] : [], playerIds: [], keeperId: ""}];
+    return {
+      matchId: matchId, step: 1, mode: "tournament",
+      opponent: m.opponent || "",
+      venueAddress: addr, travelMinutes: ttravel, meetPlace: tmeetPlace, meetTime: tmeetTime,
+      squads: squads,
+      guests: ex ? ex.guests.map(function(g){ return {name: g.name, team: g.team}; }) : []
+    };
+  }
+  var away = (m.homeAway || "away") === "away";
   var travel = ex ? (ex.travelMinutes || 0) : (v ? v.travelMinutes : 0);
-  var meetPlace = ex ? ex.meetPlace : (away ? "Militärparkplatz Bülach" : addr);
+  var meetPlace = ex ? ex.meetPlace : (away ? awayMeetPlace() : addr);
   var meetTime = ex ? ex.meetTime : (m.time ? proposeMeetTime(m.time, away ? "away" : "home", travel) : "");
   return {
-    matchId: matchId, step: 1,
+    matchId: matchId, step: 1, mode: "match",
     opponent: m.opponent || "",
     homeAway: away ? "away" : "home",
     venueAddress: addr,
@@ -873,6 +893,10 @@ function captureCallupStep1(){
   if (el("cw-travel")) cw.travelMinutes = Number(val("cw-travel")) || 0;
   if (el("cw-meetplace")) cw.meetPlace = val("cw-meetplace");
   if (el("cw-meettime")) cw.meetTime = val("cw-meettime");
+}
+function captureSquads(){
+  var cw = UI.callup; if (!cw || !cw.squads) return;
+  cw.squads.forEach(function(sq, i){ if (el("cw-sqname-" + i)) sq.name = val("cw-sqname-" + i); });
 }
 function planOccurrences(){
   return plannedOccurrences(todayISO(), seasonTo())
@@ -1351,7 +1375,14 @@ function adminCallups(){
   h += matches.length ? '<div class="card">' + matches.map(function(m){
       var cu = callupForMatch(m.id);
       var ha = m.homeAway ? ' <span class="pill ' + (m.homeAway === "home" ? "pill-home" : "pill-away") + '">' + (m.homeAway === "home" ? "Heim" : "Auswärts") + "</span>" : "";
-      var status = cu ? ("Aufgebot erstellt · " + cu.playerIds.length + " Spieler, " + cu.coachIds.length + " Trainer") : "Noch kein Aufgebot";
+      var status = "Noch kein Aufgebot";
+      if (cu && cu.squads) {
+        var np = cu.squads.reduce(function(a, sq){ return a + sq.playerIds.length; }, 0);
+        var nc = cu.squads.reduce(function(a, sq){ return a + sq.coachIds.length; }, 0);
+        status = "Aufgebot erstellt · " + cu.squads.length + " Team" + (cu.squads.length === 1 ? "" : "s") + ", " + np + " Spieler, " + nc + " Trainer";
+      } else if (cu) {
+        status = "Aufgebot erstellt · " + cu.playerIds.length + " Spieler, " + cu.coachIds.length + " Trainer";
+      }
       return '<button class="item" data-act="callupopen" data-id="' + m.id + '"><span class="grow"><b>' + fmtShort(m.date) + "</b> · " + esc(m.opponent || m.label || "Wettkampf") + ha
         + '<br><span class="small muted">' + esc(status) + '</span></span><span class="ev-side">' + ICON.chev + "</span></button>";
     }).join("") + "</div>"
@@ -1371,7 +1402,11 @@ function adminSettings(){
     + field("t-pin", "App-PIN", '<input type="text" inputmode="numeric" id="t-pin" value="' + esc(s.pin) + '" placeholder="leer = kein Schutz">')
     + field("t-apin", "Admin-PIN", '<input type="text" inputmode="numeric" id="t-apin" value="' + esc(s.adminPin) + '" placeholder="leer = kein Schutz">')
     + '</div><button class="btn btn-primary btn-block" style="margin-top:10px" data-act="savesettings">Speichern</button></div>'
-    + '<div class="eyebrow">Aufgebot</div><div class="card" style="padding:13px">'
+    + '<div class="eyebrow">Aufgebot</div><div class="card" style="padding:13px"><div class="formgrid">'
+    + field("t-cmode", "Art der Wettkampftage", '<select id="t-cmode"><option value="match"' + (s.callupMode !== "tournament" ? " selected" : "") + '>Einzelspiel (ein Gegner, Heim/Auswärts)</option><option value="tournament"' + (s.callupMode === "tournament" ? " selected" : "") + ">Turnier (ein oder zwei Teams, kein fester Gegner)</option></select>")
+    + '</div><div class="formgrid" style="margin-top:10px">'
+    + field("t-meetplace", "Treffpunkt auswärts/Turnier", '<input type="text" id="t-meetplace" value="' + esc(s.awayMeetPlace) + '" placeholder="' + esc(CALLUP_MEETPLACE_DEFAULT) + '">')
+    + '</div><p class="small muted" style="margin:2px 0 10px">Fester Text für den Treffpunkt bei Auswärtsspielen bzw. Turnieren. Leer lassen für «' + esc(CALLUP_MEETPLACE_DEFAULT) + '».</p>'
     + '<p class="small muted" style="margin:0 0 10px">Fester Text, der auf jedem Aufgebot unter «Mitnehmen» und «Abmeldungen/Verspätungen» erscheint. Leer lassen für den Standardtext.</p>'
     + '<label class="f" for="t-cnotes">Mitnehmen<textarea id="t-cnotes" placeholder="' + esc(CALLUP_NOTES_DEFAULT) + '">' + esc(s.callupNotes) + "</textarea></label>"
     + '<label class="f" for="t-ccancel" style="margin-top:10px">Abmeldungen/Verspätungen<textarea id="t-ccancel" placeholder="' + esc(CALLUP_CANCEL_DEFAULT) + '">' + esc(s.callupCancelHint) + "</textarea></label>"
@@ -1397,20 +1432,24 @@ function viewCallupWizard(){
   var cw = UI.callup;
   var m = cw ? byId(DB.singles, cw.matchId) : null;
   if (!cw || !m) return '<div class="card empty">Dieser Wettkampftag wurde gelöscht.</div>';
-  var titles = ["", "Treffpunkt", "Trainer", "Spieler"];
-  var h = '<div class="eyebrow">Schritt ' + cw.step + ' von 3 &middot; ' + titles[cw.step] + '</div>'
+  var isT = cw.mode === "tournament";
+  var maxStep = isT ? 2 : 3;
+  var titles = isT ? ["", "Treffpunkt", "Teams"] : ["", "Treffpunkt", "Trainer", "Spieler"];
+  var h = '<div class="eyebrow">Schritt ' + cw.step + ' von ' + maxStep + ' &middot; ' + titles[cw.step] + '</div>'
     + '<p class="small muted" style="margin:-4px 0 12px">' + fmtDate(m.date) + (m.time ? " &middot; Anpfiff " + esc(m.time) + " Uhr" : "") + '</p>';
-  if (cw.step === 1) h += callupStep1(cw, m);
+  if (cw.step === 1) h += callupStep1(cw);
+  else if (isT) h += callupStepSquads(cw);
   else if (cw.step === 2) h += callupStep2(cw);
   else h += callupStep3(cw);
   return h;
 }
 
 function callupStep1(cw){
-  var away = cw.homeAway === "away";
+  var isT = cw.mode === "tournament";
+  var away = isT ? true : cw.homeAway === "away";
   return '<div class="card" style="padding:13px"><div class="formgrid">'
-    + field("cw-opp", "Gegner", '<input type="text" id="cw-opp" value="' + esc(cw.opponent) + '" placeholder="z. B. FC Muster c">')
-    + field("cw-ha", "Heim / Auswärts", '<select id="cw-ha"><option value="away"' + (away ? " selected" : "") + '>Auswärts</option><option value="home"' + (!away ? " selected" : "") + '>Heim</option></select>')
+    + field("cw-opp", isT ? "Turnier-Bezeichnung" : "Gegner", '<input type="text" id="cw-opp" value="' + esc(cw.opponent) + '" placeholder="' + (isT ? "z. B. PMF Turnier in Seuzach" : "z. B. FC Muster c") + '">')
+    + (isT ? "" : field("cw-ha", "Heim / Auswärts", '<select id="cw-ha"><option value="away"' + (away ? " selected" : "") + '>Auswärts</option><option value="home"' + (!away ? " selected" : "") + '>Heim</option></select>'))
     + '</div><div class="formgrid" style="margin-top:10px">'
     + field("cw-addr", "Sportplatz-Adresse", '<input type="text" id="cw-addr" value="' + esc(cw.venueAddress) + '" placeholder="z. B. Sportanlage Buhwil, Effretikon">')
     + (away ? field("cw-travel", "Fahrzeit ab Bülach (Minuten)", '<input type="number" min="0" inputmode="numeric" id="cw-travel" value="' + esc(String(cw.travelMinutes || 0)) + '">') : "")
@@ -1419,11 +1458,62 @@ function callupStep1(cw){
     + field("cw-meetplace", "Besammlungsort", '<input type="text" id="cw-meetplace" value="' + esc(cw.meetPlace) + '">')
     + field("cw-meettime", "Besammlungszeit", '<input type="time" id="cw-meettime" value="' + esc(cw.meetTime) + '">')
     + '</div><p class="small muted" style="margin:8px 0 0">Vorschlag: 1 Stunde vor Anpfiff am Spielort'
-    + (away ? " abzüglich Fahrzeit ab Bülach &ndash; Treffpunkt bei Auswärtsspielen ist der Militärparkplatz Bülach." : ".")
+    + (away ? " abzüglich Fahrzeit ab Bülach &ndash; Treffpunkt " + (isT ? "" : "bei Auswärtsspielen ") + "ist " + esc(awayMeetPlace()) + "." : ".")
     + " Beide Felder lassen sich frei anpassen.</p></div>"
     + '<div class="wrap" style="margin-top:14px;justify-content:space-between">'
     + '<button class="btn" data-act="back">Zurück</button>'
     + '<button class="btn btn-primary" data-act="cwnext">Weiter</button></div>';
+}
+
+function callupStepSquads(cw){
+  var players = activePlayers();
+  var coaches = activeCoaches();
+  var h = "";
+  cw.squads.forEach(function(sq, i){
+    var usedElsewhere = {};
+    cw.squads.forEach(function(other, j){ if (j !== i) other.playerIds.forEach(function(pid){ usedElsewhere[pid] = true; }); });
+    h += '<div class="eyebrow">Team ' + (i + 1) + "</div>"
+      + '<div class="card" style="padding:13px"><div class="formgrid">'
+      + field("cw-sqname-" + i, "Name Team " + (i + 1), '<input type="text" id="cw-sqname-' + i + '" value="' + esc(sq.name) + '" placeholder="z. B. Team A">')
+      + "</div></div>";
+    h += '<p class="small muted" style="margin:10px 0 8px">Trainer &ndash; mindestens 1, maximal 2</p>';
+    h += coaches.length ? '<div class="wrap">' + coaches.map(function(c){
+        var on = sq.coachIds.indexOf(c.id) >= 0;
+        return '<button class="coach" data-act="cwsquadcoach" data-sq="' + i + '" data-id="' + c.id + '" aria-pressed="' + on + '">' + (on ? ICON.check : "") + esc(fullName(c)) + "</button>";
+      }).join("") + "</div>"
+      : '<div class="card empty">Noch keine Trainer erfasst.</div>';
+    h += '<p class="small muted" style="margin:14px 0 8px">Spieler &ndash; antippen wählt aus/ab, <b>TW</b> markiert den Torhüter</p>';
+    h += players.length ? '<div class="card">' + players.map(function(p){
+        var blocked = usedElsewhere[p.id];
+        var on = sq.playerIds.indexOf(p.id) >= 0;
+        var gk = sq.keeperId === p.id;
+        return '<div class="item cwitem' + (on ? " sel" : "") + '">'
+          + '<button class="grow" data-act="cwsquadplayer" data-sq="' + i + '" data-id="' + p.id + '"' + (blocked ? " disabled" : "") + ' style="text-align:left;background:none;border:0;padding:0;font:inherit;color:inherit;cursor:pointer">'
+          + "<b>" + esc(p.first) + "</b> " + esc(p.last) + (blocked ? ' <span class="muted small">bereits in anderem Team</span>' : "") + "</button>"
+          + '<button class="tw" data-act="cwsquadgk" data-sq="' + i + '" data-id="' + p.id + '" aria-pressed="' + gk + '"' + (on ? "" : " disabled") + '>TW</button></div>';
+      }).join("") + "</div>"
+      : '<div class="card empty">Noch keine Spieler erfasst.</div>';
+    if (cw.squads.length > 1) h += '<button class="btn btn-sm" style="margin-top:10px" data-act="cwremovesquad" data-sq="' + i + '">' + esc(sq.name || "Dieses Team") + " entfernen</button>";
+    h += '<div style="margin:20px 0;border-top:1px solid var(--line)"></div>';
+  });
+
+  if (cw.squads.length < 2) h += '<button class="btn btn-block" style="margin-bottom:14px" data-act="cwaddsquad">+ Zweites Team hinzufügen</button>';
+
+  h += '<div class="eyebrow">Gastspieler (optional)</div>'
+    + '<div class="guestrow"><input type="text" id="cw-gname" autocomplete="off" placeholder="Name">'
+    + '<input type="text" id="cw-gteam" autocomplete="off" placeholder="Team, z. B. D9c" style="max-width:120px">'
+    + '<button class="btn" data-act="cwguestadd">+</button></div>';
+  if (cw.guests.length) {
+    h += '<div class="wrap" style="margin-top:10px">' + cw.guests.map(function(g, i){
+      return '<span class="guestchip">' + esc(g.name) + (g.team ? ' <span class="muted small">' + esc(g.team) + "</span>" : "")
+        + '<button data-act="cwguestdel" data-idx="' + i + '">&times;</button></span>';
+    }).join("") + "</div>";
+  }
+
+  h += '<div class="wrap" style="margin-top:16px;justify-content:space-between">'
+    + '<button class="btn" data-act="back">Zurück</button>'
+    + '<button class="btn btn-primary" data-act="cwsave">' + (callupForMatch(cw.matchId) ? "Aufgebot aktualisieren" : "Aufgebot erstellen") + "</button></div>";
+  return h;
 }
 
 function callupStep2(cw){
@@ -1477,44 +1567,74 @@ function viewCallupPrint(){
   if (!m) return '<div class="card empty">Dieser Wettkampftag wurde gelöscht.</div>';
   var cu = callupForMatch(m.id);
   if (!cu) return '<div class="card empty">Für diesen Wettkampftag besteht noch kein Aufgebot. <button class="btn btn-sm" style="margin-top:10px" data-act="callupopen" data-id="' + m.id + '">Aufgebot erstellen</button></div>';
+  var isT = !!cu.squads;
 
-  var names = cu.playerIds.map(function(pid){
-    var p = byId(DB.players, pid); if (!p) return null;
-    return fullName(p) + (cu.keeperId === pid ? " (TW)" : "");
-  }).filter(Boolean);
-  cu.guests.forEach(function(g){ names.push(g.name + (g.team ? " (" + g.team + ")" : "")); });
+  var calledUpIds = isT ? cu.squads.reduce(function(a, sq){ return a.concat(sq.playerIds); }, []) : cu.playerIds.slice();
+  var notCalledUp = activePlayers().filter(function(p){ return calledUpIds.indexOf(p.id) < 0; }).map(fullName);
 
-  var coachNames = cu.coachIds.map(function(cid){ var c = byId(DB.coaches, cid); return c ? fullName(c) : null; }).filter(Boolean).join(" und ");
-  var away = m.homeAway === "away";
   var addr = m.venueAddress || "";
   var mapsUrl = addr ? "https://maps.google.com/?q=" + encodeURIComponent(addr) : "";
   var notes = DB.settings.callupNotes || CALLUP_NOTES_DEFAULT;
   var cancelHint = DB.settings.callupCancelHint || CALLUP_CANCEL_DEFAULT;
   var logo = (TEAM && TEAM.logo) ? '<div class="ca-logo"><img src="' + TEAM.logo + '" alt="' + esc(DB.settings.team || TITLE) + '"></div>' : "";
+  var teamName = DB.settings.team || TITLE;
 
   var h = '<div class="stack-s noprint" style="margin-bottom:14px">'
     + '<button class="btn btn-primary btn-block" data-act="print">Drucken / als PDF sichern</button>'
     + '<button class="btn btn-block" data-act="callupopen" data-id="' + m.id + '">Bearbeiten</button>'
     + '<p class="small muted" style="margin:2px 0 0">Öffnet sich kein Druckdialog, im Browsermenü «Drucken» wählen &ndash; dort lässt sich «Als PDF sichern» auswählen.</p></div>';
 
-  h += '<div class="capaper"><div class="ca-head"><div>'
-    + "<h2>Spielaufgebot für " + (away ? "Auswärtsspiel" : "Heimspiel") + " am " + fmtShort(m.date) + "</h2>"
-    + '<div><span class="ca-lbl">Gegner:</span> ' + esc(m.opponent || "–") + "</div></div>"
-    + logo + "</div>";
+  h += '<div class="capaper"><div class="ca-head"><div>';
+  if (isT) {
+    h += "<h2>Spielaufgebot für " + esc(m.opponent || "das Turnier") + "</h2>";
+  } else {
+    var away = m.homeAway === "away";
+    h += "<h2>Spielaufgebot für " + (away ? "Auswärtsspiel" : "Heimspiel") + " am " + fmtShort(m.date) + "</h2>"
+      + '<div><span class="ca-lbl">Gegner:</span> ' + esc(m.opponent || "–") + "</div>";
+  }
+  h += "</div>" + logo + "</div>";
 
-  h += '<div class="ca-lbl" style="margin-bottom:6px">Aufgebot für:</div><ol>' + names.map(function(n){ return "<li>" + esc(n) + "</li>"; }).join("") + "</ol>";
+  if (isT) {
+    cu.squads.forEach(function(sq, i){
+      var names = sq.playerIds.map(function(pid){
+        var p = byId(DB.players, pid); if (!p) return null;
+        return fullName(p) + (sq.keeperId === pid ? " (TW)" : "");
+      }).filter(Boolean);
+      if (i === 0) cu.guests.forEach(function(g){ names.push(g.name + (g.team ? " (" + g.team + ")" : "")); });
+      h += '<div class="ca-lbl" style="margin-bottom:6px">' + esc(teamName) + " " + esc(sq.name || "Team " + (i + 1)) + ":</div>"
+        + "<ul>" + names.map(function(n){ return "<li>" + esc(n) + "</li>"; }).join("") + "</ul>";
+    });
+  } else {
+    var names = cu.playerIds.map(function(pid){
+      var p = byId(DB.players, pid); if (!p) return null;
+      return fullName(p) + (cu.keeperId === pid ? " (TW)" : "");
+    }).filter(Boolean);
+    cu.guests.forEach(function(g){ names.push(g.name + (g.team ? " (" + g.team + ")" : "")); });
+    h += '<div class="ca-lbl" style="margin-bottom:6px">Aufgebot für:</div><ol>' + names.map(function(n){ return "<li>" + esc(n) + "</li>"; }).join("") + "</ol>";
+  }
 
-  h += "<table>"
-    + "<tr><td>Wann:</td><td><span class=\"ca-hi\">" + esc(fmtDate(m.date)) + "</span></td></tr>"
+  h += "<table>";
+  if (notCalledUp.length) h += "<tr><td>Nicht im Aufgebot:</td><td>" + esc(notCalledUp.join(", ")) + "</td></tr>";
+  h += "<tr><td>Wann:</td><td><span class=\"ca-hi\">" + esc(fmtDate(m.date)) + "</span></td></tr>"
     + "<tr><td>Besammlungszeit:</td><td>" + esc(cu.meetTime ? cu.meetTime + " Uhr" : "–") + "</td></tr>"
     + "<tr><td>Besammlungsort:</td><td>" + esc(cu.meetPlace || "–") + "</td></tr>"
-    + "<tr><td>Spieldauer:</td><td>" + esc(timeRange(m) || "–") + "</td></tr>"
+    + "<tr><td>" + (isT ? "Turnierzeit" : "Spieldauer") + ":</td><td>" + esc(timeRange(m) || "–") + "</td></tr>"
     + "<tr><td>Adresse Sportplatz:</td><td>" + (addr ? esc(addr) + (mapsUrl ? ' (<a class="maplink" href="' + esc(mapsUrl) + '" target="_blank" rel="noopener">Google Maps</a>)' : "") : "–") + "</td></tr>"
     + "<tr><td>Mitnehmen:</td><td>" + esc(notes) + "</td></tr>"
     + "</table>";
 
+  var coachLine;
+  if (isT) {
+    coachLine = cu.squads.map(function(sq, i){
+      var n = sq.coachIds.map(function(cid){ var c = byId(DB.coaches, cid); return c ? fullName(c) : null; }).filter(Boolean).join(" und ");
+      return esc(sq.name || "Team " + (i + 1)) + ": " + esc(n || "–");
+    }).join(" / ");
+  } else {
+    coachLine = esc(cu.coachIds.map(function(cid){ var c = byId(DB.coaches, cid); return c ? fullName(c) : null; }).filter(Boolean).join(" und ") || "–");
+  }
+
   h += '<div class="ca-foot"><span class="ca-hi">Abmeldungen/Verspätungen:</span> ' + esc(cancelHint) + "</div>"
-    + '<div class="ca-foot" style="margin-top:6px"><span class="ca-lbl">Trainer/Verantwortliche:</span> ' + esc(coachNames || "–") + "</div>";
+    + '<div class="ca-foot" style="margin-top:6px"><span class="ca-lbl">Trainer/Verantwortliche:</span> ' + coachLine + "</div>";
   h += "</div>";
   return h;
 }
@@ -1903,6 +2023,7 @@ var ACT = {
   back: function(){
     if (UI.view === "callup") {
       captureCallupStep1();
+      captureSquads();
       if (UI.callup && UI.callup.step > 1) { UI.callup.step -= 1; render(); }
       else { UI.callup = null; UI.adminTab = "callups"; go("admin"); }
       return;
@@ -2130,14 +2251,66 @@ var ACT = {
     var cw = UI.callup; if (!cw) return;
     captureCallupStep1();
     var m = byId(DB.singles, cw.matchId);
-    cw.meetPlace = cw.homeAway === "away" ? "Militärparkplatz Bülach" : cw.venueAddress;
-    cw.meetTime = (m && m.time) ? proposeMeetTime(m.time, cw.homeAway, cw.travelMinutes) : "";
+    var away = cw.mode === "tournament" ? true : cw.homeAway === "away";
+    cw.meetPlace = away ? awayMeetPlace() : cw.venueAddress;
+    cw.meetTime = (m && m.time) ? proposeMeetTime(m.time, away ? "away" : "home", cw.travelMinutes) : "";
     render();
   },
   cwnext: function(){
     var cw = UI.callup; if (!cw) return;
     captureCallupStep1();
-    cw.step = Math.min(3, cw.step + 1);
+    cw.step = Math.min(cw.mode === "tournament" ? 2 : 3, cw.step + 1);
+    render();
+  },
+  cwaddsquad: function(){
+    var cw = UI.callup; if (!cw || !cw.squads) return;
+    captureSquads();
+    if (cw.squads.length >= 2) return;
+    cw.squads.push({name: "Team " + String.fromCharCode(65 + cw.squads.length), coachIds: [], playerIds: [], keeperId: ""});
+    render();
+  },
+  cwremovesquad: function(t){
+    var cw = UI.callup; if (!cw || !cw.squads) return;
+    captureSquads();
+    if (cw.squads.length <= 1) return;
+    cw.squads.splice(Number(t.getAttribute("data-sq")), 1);
+    render();
+  },
+  cwsquadcoach: function(t){
+    var cw = UI.callup; if (!cw || !cw.squads) return;
+    var sq = cw.squads[Number(t.getAttribute("data-sq"))]; if (!sq) return;
+    var id = t.getAttribute("data-id");
+    var on = sq.coachIds.indexOf(id) >= 0;
+    if (on) {
+      if (sq.coachIds.length <= 1) { toast("Mindestens ein Trainer pro Team nötig."); return; }
+      sq.coachIds = sq.coachIds.filter(function(x){ return x !== id; });
+    } else {
+      if (sq.coachIds.length >= 2) { toast("Maximal zwei Trainer pro Team möglich."); return; }
+      sq.coachIds.push(id);
+    }
+    render();
+  },
+  cwsquadplayer: function(t){
+    var cw = UI.callup; if (!cw || !cw.squads) return;
+    var i = Number(t.getAttribute("data-sq")); var sq = cw.squads[i]; if (!sq) return;
+    var id = t.getAttribute("data-id");
+    var elsewhere = cw.squads.some(function(other, j){ return j !== i && other.playerIds.indexOf(id) >= 0; });
+    if (elsewhere) return;
+    var on = sq.playerIds.indexOf(id) >= 0;
+    if (on) {
+      sq.playerIds = sq.playerIds.filter(function(x){ return x !== id; });
+      if (sq.keeperId === id) sq.keeperId = "";
+    } else {
+      sq.playerIds.push(id);
+    }
+    render();
+  },
+  cwsquadgk: function(t){
+    var cw = UI.callup; if (!cw || !cw.squads) return;
+    var sq = cw.squads[Number(t.getAttribute("data-sq"))]; if (!sq) return;
+    var id = t.getAttribute("data-id");
+    if (sq.playerIds.indexOf(id) < 0) return;
+    sq.keeperId = (sq.keeperId === id) ? "" : id;
     render();
   },
   cwcoach: function(t){
@@ -2187,10 +2360,24 @@ var ACT = {
   },
   cwsave: function(){
     var cw = UI.callup; if (!cw) return;
-    if (!cw.coachIds.length) { toast("Bitte mindestens einen Trainer wählen."); return; }
-    if (!cw.playerIds.length) { toast("Bitte mindestens einen Spieler wählen."); return; }
     var matchId = cw.matchId;
-    var payload = {
+    var isT = cw.mode === "tournament";
+    if (isT) {
+      captureSquads();
+      for (var i = 0; i < cw.squads.length; i++) {
+        if (!cw.squads[i].coachIds.length) { toast("Bitte für jedes Team mindestens einen Trainer wählen."); return; }
+        if (!cw.squads[i].playerIds.length) { toast("Bitte für jedes Team mindestens einen Spieler wählen."); return; }
+      }
+    } else {
+      if (!cw.coachIds.length) { toast("Bitte mindestens einen Trainer wählen."); return; }
+      if (!cw.playerIds.length) { toast("Bitte mindestens einen Spieler wählen."); return; }
+    }
+    var payload = isT ? {
+      opponent: cw.opponent, venueAddress: cw.venueAddress, travelMinutes: cw.travelMinutes,
+      meetPlace: cw.meetPlace, meetTime: cw.meetTime,
+      squads: cw.squads.map(function(sq){ return {name: sq.name, coachIds: sq.coachIds.slice(), playerIds: sq.playerIds.slice(), keeperId: sq.keeperId}; }),
+      guests: cw.guests.map(function(g){ return {name: g.name, team: g.team}; })
+    } : {
       opponent: cw.opponent, homeAway: cw.homeAway, venueAddress: cw.venueAddress,
       travelMinutes: cw.travelMinutes, meetPlace: cw.meetPlace, meetTime: cw.meetTime,
       coachIds: cw.coachIds.slice(), playerIds: cw.playerIds.slice(), keeperId: cw.keeperId,
@@ -2198,20 +2385,28 @@ var ACT = {
     };
     commit(function(db){
       var m = byId(db.singles, matchId);
-      if (m) { m.opponent = payload.opponent; m.homeAway = payload.homeAway; m.venueAddress = payload.venueAddress; }
-      if (payload.homeAway === "away" && payload.venueAddress) {
+      if (m) {
+        m.opponent = payload.opponent; m.venueAddress = payload.venueAddress;
+        if (!isT) m.homeAway = payload.homeAway;
+      }
+      var away = isT ? true : payload.homeAway === "away";
+      if (away && payload.venueAddress) {
         var key = payload.venueAddress.trim().toLowerCase();
         var v = db.venues.filter(function(x){ return String(x.address || "").trim().toLowerCase() === key; })[0];
         if (v) v.travelMinutes = payload.travelMinutes;
         else db.venues.push({address: payload.venueAddress, travelMinutes: payload.travelMinutes});
       }
       var existing = db.callups.filter(function(c){ return c.matchId === matchId; })[0];
+      var fields = isT
+        ? {meetPlace: payload.meetPlace, meetTime: payload.meetTime, travelMinutes: payload.travelMinutes, squads: payload.squads, guests: payload.guests}
+        : {meetPlace: payload.meetPlace, meetTime: payload.meetTime, travelMinutes: payload.travelMinutes,
+           coachIds: payload.coachIds, playerIds: payload.playerIds, keeperId: payload.keeperId, guests: payload.guests};
       if (existing) {
-        existing.meetPlace = payload.meetPlace; existing.meetTime = payload.meetTime; existing.travelMinutes = payload.travelMinutes;
-        existing.coachIds = payload.coachIds; existing.playerIds = payload.playerIds; existing.keeperId = payload.keeperId; existing.guests = payload.guests;
+        delete existing.squads; delete existing.coachIds; delete existing.playerIds; delete existing.keeperId;
+        for (var k in fields) existing[k] = fields[k];
       } else {
-        db.callups.push({id: uid("cu"), matchId: matchId, meetPlace: payload.meetPlace, meetTime: payload.meetTime, travelMinutes: payload.travelMinutes,
-          coachIds: payload.coachIds, playerIds: payload.playerIds, keeperId: payload.keeperId, guests: payload.guests});
+        fields.id = uid("cu"); fields.matchId = matchId;
+        db.callups.push(fields);
       }
     }, "Aufgebot gespeichert.", {view: "callupprint", callupPrintId: matchId, callup: null});
   },
@@ -2219,7 +2414,8 @@ var ACT = {
     var team = val("t-team"), season = val("t-season"), s = val("t-start"), e = val("t-end");
     var pin = val("t-pin").replace(/\D/g, ""), apin = val("t-apin").replace(/\D/g, "");
     var cnotes = val("t-cnotes"), ccancel = val("t-ccancel");
-    commit(function(db){ db.settings = {team: team, season: season, seasonStart: s, seasonEnd: e, pin: pin, adminPin: apin, callupNotes: cnotes, callupCancelHint: ccancel}; },
+    var cmode = val("t-cmode") === "tournament" ? "tournament" : "match", meetplace = val("t-meetplace");
+    commit(function(db){ db.settings = {team: team, season: season, seasonStart: s, seasonEnd: e, pin: pin, adminPin: apin, callupNotes: cnotes, callupCancelHint: ccancel, callupMode: cmode, awayMeetPlace: meetplace}; },
       "Gespeichert.").then(function(ok){
         if (ok && TEAM) {
           PIN = pin;   // ab jetzt gilt der neue PIN auch fuer diese Sitzung

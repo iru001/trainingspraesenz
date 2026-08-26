@@ -85,11 +85,17 @@ statt die Arbeit des anderen zu überschreiben.
 - Team, Saison, Saisonzeitraum sowie App-PIN und Admin-PIN
 
 **Aufgebot**
-- Schritt-für-Schritt-Wizard für Wettkampftage: Treffpunkt, Trainer (1–2), Spieler
-  (bis 14) plus frei erfassbare Gastspieler und Torhüter-Markierung
+- Schritt-für-Schritt-Wizard für Wettkampftage; zwei Vorlagen, pro Team unter
+  «Team» einstellbar:
+  - **Einzelspiel**: ein Gegner, Heim/Auswärts, Trainer (1–2), Spieler (bis 14)
+  - **Turnier**: keine feste Gegnerschaft, dafür ein oder zwei eigene Teams,
+    je mit eigenem Namen, Trainer (1–2) und beliebig vielen Spielern
+  In beiden Fällen frei erfassbare Gastspieler und Torhüter-Markierung
 - Treffpunkt/-zeit werden vorgeschlagen: 1 Stunde vor Anpfiff am Spielort, bei
-  Auswärtsspielen abzüglich Fahrzeit ab Bülach (Treffpunkt dann Militärparkplatz) –
-  einmal erfasste Fahrzeiten pro Ort werden für spätere Aufgebote vorgeschlagen
+  Auswärtsspielen bzw. im Turnier-Modus abzüglich Fahrzeit ab Bülach (Treffpunkt
+  dann ein fester, pro Team einstellbarer Ort) – einmal erfasste Fahrzeiten pro
+  Sportplatz werden für spätere Aufgebote automatisch vorgeschlagen
+- «Nicht im Aufgebot» wird automatisch aus dem Kader berechnet und mit aufgeführt
 - Ergebnis ist ein fertiges Aufgebot im Look der bisherigen Papier-Vorlage, druckbar
   bzw. als PDF sicherbar wie der Anwesenheitsbericht
 - Bereits erstellte Aufgebote lassen sich jederzeit wieder öffnen und anpassen

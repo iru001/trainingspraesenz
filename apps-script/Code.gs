@@ -413,13 +413,28 @@ function renderSheets(state) {
     }).forEach(function (cu) {
       var m = singlesById[cu.matchId];
       if (!m) return; // Wettkampftag wurde inzwischen geloescht
-      var names = (cu.playerIds || []).map(function (pid) {
-        var p = playersById[pid]; if (!p) return null;
-        return nameOf(p) + (cu.keeperId === pid ? ' (TW)' : '');
-      }).filter(Boolean);
+      var names = [];
+      var coachN;
+      if (cu.squads) {
+        (cu.squads || []).forEach(function (sq) {
+          (sq.playerIds || []).forEach(function (pid) {
+            var p = playersById[pid]; if (!p) return;
+            names.push(nameOf(p) + (sq.keeperId === pid ? ' (TW)' : '') + ' [' + (sq.name || '') + ']');
+          });
+        });
+        coachN = (cu.squads || []).map(function (sq) {
+          var n = (sq.coachIds || []).map(function (cid) { var c = coachesById[cid]; return c ? nameOf(c) : null; }).filter(Boolean).join(', ');
+          return (sq.name || '') + ': ' + n;
+        }).join(' / ');
+      } else {
+        names = (cu.playerIds || []).map(function (pid) {
+          var p = playersById[pid]; if (!p) return null;
+          return nameOf(p) + (cu.keeperId === pid ? ' (TW)' : '');
+        }).filter(Boolean);
+        coachN = (cu.coachIds || []).map(function (cid) { var c = coachesById[cid]; return c ? nameOf(c) : null; }).filter(Boolean).join(', ');
+      }
       (cu.guests || []).forEach(function (g) { names.push((g.name || '') + (g.team ? ' (' + g.team + ')' : '')); });
-      var coachN = (cu.coachIds || []).map(function (cid) { var c = coachesById[cid]; return c ? nameOf(c) : null; }).filter(Boolean).join(', ');
-      rows.push([fmtDay(m.date), m.opponent || '', m.homeAway === 'home' ? 'Heim' : 'Auswärts',
+      rows.push([fmtDay(m.date), m.opponent || '', cu.squads ? 'Turnier' : (m.homeAway === 'home' ? 'Heim' : 'Auswärts'),
         cu.meetTime || '', cu.meetPlace || '', coachN, names.join(', '), names.length]);
     });
     put(sh, rows);
