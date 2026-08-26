@@ -169,6 +169,13 @@ input[type=text],input[type=date],input[type=time],input[type=number],select,tex
   width:100%;background:var(--surface);border:1px solid var(--line-2);border-radius:var(--r-s);
   padding:10px 12px;font-size:16px;font-weight:400;color:var(--ink);min-height:44px;
 }
+/* Nur bei Text-/Zahlenfeldern: die native Kontroll-Optik (bei "color-scheme:
+   dark" auf iOS Safari ein eigener dunkler Rahmen/Schatten UNTER dem
+   eigenen CSS-Rahmen) vollstaendig unterdruecken - das erzeugte auf einem
+   echten iPhone im Dunkelmodus einen sichtbaren doppelten/verschobenen
+   Rahmen. Datum/Zeit/Select bewusst ausgenommen: dort entfernt appearance:none
+   in WebKit das native Kalender-/Uhr-Icon bzw. den Auswahlpfeil ersatzlos. */
+input[type=text],input[type=number]{-webkit-appearance:none;appearance:none;}
 textarea{min-height:96px;line-height:1.45;resize:vertical}
 input::placeholder,textarea::placeholder{color:var(--ink-3)}
 
