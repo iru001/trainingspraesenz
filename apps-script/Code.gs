@@ -22,7 +22,11 @@ var CHUNK = 40000;                // max. Zeichen pro Zelle
 var LOCK_MS = 25000;
 
 // Obergrenzen gegen aufgeblaehte oder boesartige Datenmengen
-var MAX_BODY = 300000;            // Zeichen pro Anfrage
+// MAX_BODY grosszuegig bemessen: der gesamte Datenbestand wird bei jeder
+// Speicherung komplett uebertragen (keine Delta-Uebertragung), waechst also mit
+// jedem Termin/jeder Saison weiter. 300000 wurde bereits nach 2-3 Saisons
+// erreicht und haette danach JEDE weitere Speicherung dauerhaft blockiert.
+var MAX_BODY = 3000000;           // Zeichen pro Anfrage
 var MAX_PLAYERS = 300;
 var MAX_COACHES = 60;
 var MAX_RECORDS = 3000;
@@ -241,7 +245,6 @@ function put(sh, rows, headerRows) {
   var h = headerRows || 1;
   sh.getRange(1, 1, h, width).setFontWeight('bold');
   sh.setFrozenRows(h);
-  sh.autoResizeColumns(1, Math.min(width, 30));
 }
 
 function nameOf(p) { return ((p.first || '') + ' ' + (p.last || '')).trim(); }

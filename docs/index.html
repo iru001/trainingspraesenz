@@ -16,10 +16,17 @@
 <link rel="apple-touch-icon" href="icon.svg">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Oswald:wght@500;600&family=Source+Sans+3:ital,wght@0,400;0,600;0,700&display=swap">
+<!-- Nicht blockierend laden: eine <link rel=stylesheet> vor den Skripten weiter unten
+     wuerde deren Ausfuehrung anhalten, bis Google Fonts antwortet - bei einem
+     langsamen/blockierten Netz (Firmen-WLAN, Ad-Blocker, Google-Ausfall) bliebe die
+     Seite sonst minutenlang weiss. media=print macht die Stylesheet-Anfrage
+     nicht-blockierend; onload schaltet sie danach fuer den Bildschirm scharf. -->
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Oswald:wght@500;600&family=Source+Sans+3:ital,wght@0,400;0,600;0,700&display=swap" media="print" onload="this.media='all'">
+<noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Oswald:wght@500;600&family=Source+Sans+3:ital,wght@0,400;0,600;0,700&display=swap"></noscript>
 <style id="app-style">
 
 :root{
+  color-scheme:light dark;
   --bg:#F0F3F1; --surface:#FFFFFF; --surface-2:#E7ECE9; --surface-3:#DCE3DF;
   --ink:#101A16; --ink-2:#44534C; --ink-3:#6F7E77;
   --line:#D5DCD8; --line-2:#C2CCC7;
@@ -145,7 +152,7 @@ button{cursor:pointer}
 .lockedf-row{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
 .lockedf-row:has(.fconfirm) .lockedf-val{flex-basis:100%;order:1}
 .lockedf-val{flex:1;min-width:0;padding:10px 12px;border:1px solid var(--line-2);border-radius:var(--r-s);
-  background:var(--surface-2);color:var(--ink-2);font-size:14.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-height:44px;box-sizing:border-box;display:flex;align-items:center}
+  background:var(--surface-2);color:var(--ink-2);font-size:14.5px;white-space:normal;word-break:break-word;min-height:44px;box-sizing:border-box;display:flex;align-items:center}
 .fconfirm{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:12.5px;color:var(--ink-2);font-weight:600}
 
 .rowlist{display:flex;flex-direction:column;gap:12px}
@@ -181,15 +188,16 @@ input::placeholder,textarea::placeholder{color:var(--ink-3)}
 .cwitem{display:flex;align-items:center;gap:10px;padding:10px 13px;border-top:1px solid var(--line)}
 .cwitem:first-child{border-top:0}
 .cwitem.sel{background:var(--accent-soft)}
+.cwitem .grow svg{width:15px;height:15px;stroke:var(--accent);fill:none;stroke-width:2.6;stroke-linecap:round;stroke-linejoin:round;vertical-align:-2px;margin-right:6px;flex:none}
 .cwitem .tw{border:1px solid var(--line-2);background:var(--surface);border-radius:8px;padding:6px 10px;font-size:11.5px;font-weight:800;font-family:Oswald,sans-serif;letter-spacing:.02em;color:var(--ink-3);flex:none}
-.cwitem .tw[aria-pressed="true"]{background:var(--warn);border-color:var(--warn);color:#fff}
+.cwitem .tw[aria-pressed="true"]{background:var(--warn);border-color:var(--warn);color:var(--on-accent)}
 .cwitem .tw:disabled{opacity:.35}
 button.item{width:100%;text-align:left;background:none;border:0;border-top:1px solid var(--line);cursor:pointer;font:inherit;color:inherit}
 button.item:first-child{border-top:0}
 .guestrow{display:flex;gap:6px;margin-top:8px}
 .guestrow input{flex:1;min-width:0}
 .guestchip{display:inline-flex;align-items:center;gap:6px;background:var(--surface-2);border:1px solid var(--line-2);border-radius:999px;padding:5px 6px 5px 12px;font-size:13px;margin:0 6px 6px 0}
-.guestchip button{border:0;background:var(--surface-3);color:var(--ink-2);width:20px;height:20px;border-radius:50%;font-size:13px;line-height:1;cursor:pointer}
+.guestchip button{border:0;background:var(--surface-3);color:var(--ink-2);width:24px;height:24px;border-radius:50%;font-size:15px;line-height:1;cursor:pointer}
 
 /* ---------- Aufgebot: Druckansicht ---------- */
 .capaper{background:#fff;color:#1a1a1a;border-radius:var(--r);box-shadow:var(--shadow);padding:26px 24px;font-size:13.5px;line-height:1.6}
@@ -765,14 +773,30 @@ async function runAvailabilitySaveLoop(){
         break;
       } else {
         toast(r.message || failText({error: r.error}));
+        scheduleAvailRetry();
         break;
       }
     } catch(err) {
       toast(failText(err));
+      scheduleAvailRetry();
       break;
     }
   }
   AVAIL_SAVING = false;
+}
+// Bei einem sonstigen Fehler (z. B. kurzer Netzausfall) bleiben die Tipps in
+// AVAIL_PENDING stehen und wuerden sonst nur beim naechsten Tippen erneut
+// versucht - ohne weiteren Tipp bliebe eine Zu-/Absage sonst unbemerkt
+// dauerhaft ungespeichert. Ein einmaliger automatischer Wiederholungsversuch
+// nach kurzer Verzoegerung deckt den haeufigen Fall (Netz kurz weg) ab, ohne
+// bei einem echten/dauerhaften Fehler den Server mit Anfragen zu bombardieren.
+var AVAIL_RETRY_TIMER = null;
+function scheduleAvailRetry(){
+  if (AVAIL_RETRY_TIMER) return;
+  AVAIL_RETRY_TIMER = setTimeout(function(){
+    AVAIL_RETRY_TIMER = null;
+    if (AVAIL_PENDING.length) runAvailabilitySaveLoop();
+  }, 4000);
 }
 
 /* ===================== Datei-Download ===================== */
@@ -899,9 +923,13 @@ function newCallupState(matchId){
     travelMinutes: travel,
     meetPlace: meetPlace,
     meetTime: meetTime,
-    coachIds: ex ? ex.coachIds.slice() : (myCoachId() ? [myCoachId()] : []),
-    playerIds: ex ? ex.playerIds.slice() : [],
-    keeperId: ex ? (ex.keeperId || "") : "",
+    // ex koennte von einer frueheren Speicherung unter callupMode "tournament"
+    // stammen (squads statt coachIds/playerIds) - z. B. wenn die Team-Einstellung
+    // "Art der Wettkampftage" nachtraeglich geaendert wurde. In dem Fall wie bei
+    // "kein bestehendes Aufgebot" behandeln, statt auf undefined.slice() abzustuerzen.
+    coachIds: (ex && ex.coachIds) ? ex.coachIds.slice() : (myCoachId() ? [myCoachId()] : []),
+    playerIds: (ex && ex.playerIds) ? ex.playerIds.slice() : [],
+    keeperId: (ex && ex.keeperId) || "",
     guests: ex ? ex.guests.map(function(g){ return {name: g.name, team: g.team}; }) : [],
     rows: (ex && ex.rows && ex.rows.length) ? cloneInfoRows(ex.rows) : defaultInfoRows(),
     unlocked: {}
@@ -1391,8 +1419,21 @@ function renderInfoRows(cw, m){
     return '<div class="rowdrag" data-rowkey="' + esc(key) + '">' + inner
       + '<button class="rowhandle" data-drag-handle title="Reihenfolge ändern (halten und ziehen)" aria-label="Reihenfolge ändern">' + ICON.handle + "</button></div>";
   }).join("");
+  var present = {};
+  cw.rows.forEach(function(r){ present[r.key] = true; });
+  // Geloeschte Standardfelder (meettime/meetplace/addr etc.) verlieren ihren Wert nicht -
+  // sie werden weiterhin in cw gefuehrt, nur nicht mehr in der Liste/im Ausdruck gezeigt.
+  // Daher genuegt ein einfacher Wiederherstellen-Button statt einer Sicherheitsabfrage-
+  // Ruecknahme; kein Datenverlust durch versehentliches Loeschen.
+  var missing = DEFAULT_INFO_ROWS.filter(function(k){ return !present[k]; });
+  var restore = missing.length
+    ? '<div class="wrap" style="margin-top:10px">' + missing.map(function(k){
+        return '<button class="btn btn-sm" data-act="cwrestorerow" data-rowkey="' + k + '">+ ' + esc(infoRowLabel(k, isT)) + " wiederherstellen</button>";
+      }).join("") + "</div>"
+    : "";
   return '<div class="rowlist">' + h + '</div>'
-    + '<button class="btn btn-sm" style="margin-top:10px" data-act="cwaddrow">+ Zusatzfeld hinzufügen</button>';
+    + '<button class="btn btn-sm" style="margin-top:10px" data-act="cwaddrow">+ Zusatzfeld hinzufügen</button>'
+    + restore;
 }
 
 function adminPeople(kind){
@@ -1504,7 +1545,7 @@ function adminCallups(){
       return '<button class="item" data-act="callupopen" data-id="' + m.id + '"><span class="grow"><b>' + fmtShort(m.date) + "</b> · " + esc(m.opponent || m.label || "Wettkampf") + ha
         + '<br><span class="small muted">' + esc(status) + '</span></span><span class="ev-side">' + ICON.chev + "</span></button>";
     }).join("") + "</div>"
-    : '<div class="card empty">Noch keine Wettkampftage hinterlegt. Zuerst unter «Termine» anlegen.</div>';
+    : '<div class="card empty">Noch keine Wettkampftage hinterlegt. Zuerst unter «Termine» anlegen. <button class="btn btn-sm" data-act="atab" data-v="plan" style="margin-top:10px">Zu Termine</button></div>';
   return h;
 }
 
@@ -1613,18 +1654,18 @@ function callupStepSquads(cw){
         var on = sq.coachIds.indexOf(c.id) >= 0;
         return '<button class="coach" data-act="cwsquadcoach" data-sq="' + i + '" data-id="' + c.id + '" aria-pressed="' + on + '">' + (on ? ICON.check : "") + esc(fullName(c)) + "</button>";
       }).join("") + "</div>"
-      : '<div class="card empty">Noch keine Trainer erfasst.</div>';
+      : '<div class="card empty">Noch keine Trainer erfasst. <button class="btn btn-sm" data-act="go" data-view="admin" data-tab="coaches" style="margin-top:10px">Trainer anlegen</button></div>';
     h += '<p class="small muted" style="margin:14px 0 8px">Spieler &ndash; antippen wählt aus/ab, <b>TW</b> markiert den Torhüter</p>';
     h += players.length ? '<div class="card">' + players.map(function(p){
         var blocked = usedElsewhere[p.id];
         var on = sq.playerIds.indexOf(p.id) >= 0;
         var gk = sq.keeperId === p.id;
         return '<div class="item cwitem' + (on ? " sel" : "") + '">'
-          + '<button class="grow" data-act="cwsquadplayer" data-sq="' + i + '" data-id="' + p.id + '"' + (blocked ? " disabled" : "") + ' style="text-align:left;background:none;border:0;padding:0;font:inherit;color:inherit;cursor:pointer">'
-          + "<b>" + esc(p.first) + "</b> " + esc(p.last) + (blocked ? ' <span class="muted small">bereits in anderem Team</span>' : "") + "</button>"
+          + '<button class="grow" data-act="cwsquadplayer" data-sq="' + i + '" data-id="' + p.id + '" aria-pressed="' + on + '"' + (blocked ? " disabled" : "") + ' style="text-align:left;background:none;border:0;padding:0;font:inherit;color:inherit;cursor:pointer">'
+          + (on ? ICON.check : "") + "<b>" + esc(p.first) + "</b> " + esc(p.last) + (blocked ? ' <span class="muted small">bereits in anderem Team</span>' : "") + "</button>"
           + '<button class="tw" data-act="cwsquadgk" data-sq="' + i + '" data-id="' + p.id + '" aria-pressed="' + gk + '"' + (on ? "" : " disabled") + '>TW</button></div>';
       }).join("") + "</div>"
-      : '<div class="card empty">Noch keine Spieler erfasst.</div>';
+      : '<div class="card empty">Noch keine Spieler erfasst. <button class="btn btn-sm" data-act="go" data-view="admin" data-tab="players" style="margin-top:10px">Spieler anlegen</button></div>';
     h += '<div style="margin:20px 0;border-top:1px solid var(--line)"></div>';
   });
 
@@ -1637,7 +1678,7 @@ function callupStepSquads(cw){
   if (cw.guests.length) {
     h += '<div class="wrap" style="margin-top:10px">' + cw.guests.map(function(g, i){
       return '<span class="guestchip">' + esc(g.name) + (g.team ? ' <span class="muted small">' + esc(g.team) + "</span>" : "")
-        + '<button data-act="cwguestdel" data-idx="' + i + '">&times;</button></span>';
+        + '<button data-act="cwguestdel" data-idx="' + i + '" aria-label="Gastspieler entfernen" title="Gastspieler entfernen">&times;</button></span>';
     }).join("") + "</div>";
   }
 
@@ -1654,7 +1695,7 @@ function callupStep2(cw){
       var on = cw.coachIds.indexOf(c.id) >= 0;
       return '<button class="coach" data-act="cwcoach" data-id="' + c.id + '" aria-pressed="' + on + '">' + (on ? ICON.check : "") + esc(fullName(c)) + "</button>";
     }).join("") + "</div>"
-    : '<div class="card empty">Noch keine Trainer erfasst.</div>';
+    : '<div class="card empty">Noch keine Trainer erfasst. <button class="btn btn-sm" data-act="go" data-view="admin" data-tab="coaches" style="margin-top:10px">Trainer anlegen</button></div>';
   h += '<div class="wrap" style="margin-top:16px;justify-content:space-between">'
     + '<button class="btn" data-act="back">Zurück</button>'
     + '<button class="btn btn-primary" data-act="cwnext">Weiter</button></div>';
@@ -1669,11 +1710,11 @@ function callupStep3(cw){
       var on = cw.playerIds.indexOf(p.id) >= 0;
       var gk = cw.keeperId === p.id;
       return '<div class="item cwitem' + (on ? " sel" : "") + '">'
-        + '<button class="grow" data-act="cwplayer" data-id="' + p.id + '" style="text-align:left;background:none;border:0;padding:0;font:inherit;color:inherit;cursor:pointer">'
-        + "<b>" + esc(p.first) + "</b> " + esc(p.last) + "</button>"
+        + '<button class="grow" data-act="cwplayer" data-id="' + p.id + '" aria-pressed="' + on + '" style="text-align:left;background:none;border:0;padding:0;font:inherit;color:inherit;cursor:pointer">'
+        + (on ? ICON.check : "") + "<b>" + esc(p.first) + "</b> " + esc(p.last) + "</button>"
         + '<button class="tw" data-act="cwgk" data-id="' + p.id + '" aria-pressed="' + gk + '"' + (on ? "" : " disabled") + '>TW</button></div>';
     }).join("") + "</div>"
-    : '<div class="card empty">Noch keine Spieler erfasst.</div>';
+    : '<div class="card empty">Noch keine Spieler erfasst. <button class="btn btn-sm" data-act="go" data-view="admin" data-tab="players" style="margin-top:10px">Spieler anlegen</button></div>';
 
   h += '<div class="eyebrow">Gastspieler (optional)</div>'
     + '<div class="guestrow"><input type="text" id="cw-gname" autocomplete="off" placeholder="Name">'
@@ -1682,7 +1723,7 @@ function callupStep3(cw){
   if (cw.guests.length) {
     h += '<div class="wrap" style="margin-top:10px">' + cw.guests.map(function(g, i){
       return '<span class="guestchip">' + esc(g.name) + (g.team ? ' <span class="muted small">' + esc(g.team) + "</span>" : "")
-        + '<button data-act="cwguestdel" data-idx="' + i + '">&times;</button></span>';
+        + '<button data-act="cwguestdel" data-idx="' + i + '" aria-label="Gastspieler entfernen" title="Gastspieler entfernen">&times;</button></span>';
     }).join("") + "</div>";
   }
 
@@ -2069,6 +2110,12 @@ function viewTeamPicker(){
 function render(){
   if (!TEAM) { el("root").innerHTML = TEAMS.length ? viewTeamPicker() : '<div class="lock"><div class="lock-card"><div class="lock-title">Kein Team eingerichtet</div><p class="lock-sub">In docs/config.js fehlt die Team-Liste.</p></div></div>'; return; }
   if (!UNLOCKED || !DB) { el("root").innerHTML = viewLock("app"); return; }
+  // UI.callup ist der Zwischenstand des Aufgebot-Wizards und wird bewusst nicht in
+  // sessionStorage gesichert (unfertige/ungespeicherte Eingaben duerften nach einem
+  // Neuladen nicht so tun, als waeren sie gespeichert). Nur UI.view ueberlebt ein
+  // Neuladen - ohne diese Weiche wuerde das dann fehlende UI.callup faelschlich als
+  // "Wettkampftag geloescht" angezeigt, statt einfach zur Aufgebote-Liste zu fuehren.
+  if (UI.view === "callup" && !UI.callup) { UI.view = "admin"; UI.adminTab = "callups"; }
   var team = DB.settings.team || TITLE;
   var sub = DB.settings.season ? "Saison " + DB.settings.season : "Anwesenheit";
   var back = (UI.view === "record" || UI.view === "adhoc" || UI.view === "report" || UI.view === "plandetail" || UI.view === "callup" || UI.view === "callupprint");
@@ -2104,7 +2151,7 @@ function render(){
     + '<main class="app">' + body + "</main>" + nav;
   window.scrollTo(0, UI.scroll || 0);
   UI.scroll = 0;
-  try { sessionStorage.setItem("tp.ui", JSON.stringify({view:UI.view, occ:UI.occ, planOcc:UI.planOcc, myCoach:UI.myCoach, statType:UI.statType, statRange:UI.statRange, statSort:UI.statSort, adminTab:UI.adminTab})); } catch(e){}
+  try { sessionStorage.setItem("tp.ui", JSON.stringify({view:UI.view, occ:UI.occ, planOcc:UI.planOcc, myCoach:UI.myCoach, statType:UI.statType, statRange:UI.statRange, statSort:UI.statSort, adminTab:UI.adminTab, callupPrintId:UI.callupPrintId})); } catch(e){}
 }
 function navBtn(v, label, icon){
   return '<button data-act="go" data-view="' + v + '"' + (UI.view === v || (v === "events" && (UI.view === "record" || UI.view === "adhoc")) || (v === "stats" && UI.view === "report") ? ' aria-current="page"' : "") + ">" + icon + "<span>" + label + "</span></button>";
@@ -2156,8 +2203,17 @@ function rowDragStart(ev, handle){
   if (index < 0) return;
   ev.preventDefault();
   try { handle.setPointerCapture(ev.pointerId); } catch(e){}
-  var rect = row.getBoundingClientRect();
-  ROWDRAG = {cw: cw, fromIndex: index, toIndex: index, startY: ev.clientY, row: row, items: items, itemH: rect.height || 44};
+  // Echte Position/Hoehe je Zeile messen statt eine einheitliche Zeilenhoehe anzunehmen:
+  // die Liste enthaelt unterschiedlich hohe Zeilen (z. B. zweizeilige Zusatzfelder) und
+  // einen CSS-Gap zwischen den Zeilen (.rowlist{gap:12px}), den getBoundingClientRect
+  // der gezogenen Zeile allein nicht mitzaehlt. Die Zielposition wird beim Ziehen anhand
+  // der naechstgelegenen urspruenglichen Zeilenmitte bestimmt statt per Division durch
+  // eine angenommene Zeilenhoehe - das bleibt auch bei ungleich hohen Zeilen korrekt.
+  var gap = parseFloat(getComputedStyle(list).rowGap) || 0;
+  var rects = items.map(function(it){ return it.getBoundingClientRect(); });
+  var centers = rects.map(function(r){ return r.top + r.height / 2; });
+  ROWDRAG = {cw: cw, fromIndex: index, toIndex: index, startY: ev.clientY, row: row, items: items,
+    centers: centers, slotH: rects[index].height + gap};
   row.classList.add("rowdrag-active");
   document.addEventListener("pointermove", rowDragMove);
   document.addEventListener("pointerup", rowDragEnd);
@@ -2168,8 +2224,12 @@ function rowDragMove(ev){
   ev.preventDefault();
   var dy = ev.clientY - ROWDRAG.startY;
   ROWDRAG.row.style.transform = "translateY(" + dy + "px)";
-  var steps = Math.round(dy / ROWDRAG.itemH);
-  var idx = Math.max(0, Math.min(ROWDRAG.items.length - 1, ROWDRAG.fromIndex + steps));
+  var draggedCenter = ROWDRAG.centers[ROWDRAG.fromIndex] + dy;
+  var idx = 0, best = Infinity;
+  ROWDRAG.centers.forEach(function(c, i){
+    var d = Math.abs(c - draggedCenter);
+    if (d < best) { best = d; idx = i; }
+  });
   if (idx !== ROWDRAG.toIndex) {
     ROWDRAG.toIndex = idx;
     ROWDRAG.items.forEach(function(it, i){
@@ -2178,7 +2238,7 @@ function rowDragMove(ev){
       if (ROWDRAG.fromIndex < idx && i > ROWDRAG.fromIndex && i <= idx) shift = -1;
       else if (ROWDRAG.fromIndex > idx && i < ROWDRAG.fromIndex && i >= idx) shift = 1;
       it.style.transition = "transform .12s ease";
-      it.style.transform = shift ? "translateY(" + (shift * ROWDRAG.itemH) + "px)" : "";
+      it.style.transform = shift ? "translateY(" + (shift * ROWDRAG.slotH) + "px)" : "";
     });
   }
 }
@@ -2195,6 +2255,7 @@ function rowDragEnd(){
   document.removeEventListener("pointermove", rowDragMove);
   document.removeEventListener("pointerup", rowDragEnd);
   document.removeEventListener("pointercancel", rowDragEnd);
+  UI.scroll = window.scrollY;
   render();
 }
 
@@ -2358,7 +2419,7 @@ var ACT = {
   ssort: function(){ UI.statSort = UI.statSort === "quote" ? "name" : "quote"; render(); },
   export: function(){ exportCsv(); },
   atab: function(t){ UI.adminTab = t.getAttribute("data-v"); UI.edit = null; UI.confirm = null; render(); },
-  ask: function(t){ UI.confirm = t.getAttribute("data-id") || null; render(); },
+  ask: function(t){ UI.scroll = window.scrollY; UI.confirm = t.getAttribute("data-id") || null; render(); },
   canceledit: function(){ UI.edit = null; render(); },
   editperson: function(t){ UI.edit = {kind: t.getAttribute("data-kind"), id: t.getAttribute("data-id")}; render(); },
   addperson: function(t){
@@ -2453,6 +2514,7 @@ var ACT = {
     var away = cw.mode === "tournament" ? true : cw.homeAway === "away";
     cw.meetPlace = away ? awayMeetPlace() : cw.venueAddress;
     cw.meetTime = (m && m.time) ? proposeMeetTime(m.time, away ? "away" : "home", cw.travelMinutes) : "";
+    UI.scroll = window.scrollY;
     render();
   },
   cwnext: function(){
@@ -2469,6 +2531,7 @@ var ACT = {
     captureCallupStep1(); captureSquads(); captureCustomRows();
     cw.unlocked = cw.unlocked || {};
     cw.unlocked[t.getAttribute("data-field")] = true;
+    UI.scroll = window.scrollY;
     render();
   },
   cwfielddel: function(t){
@@ -2480,6 +2543,7 @@ var ACT = {
     cw.unlocked = cw.unlocked || {};
     cw.unlocked[key] = true;
     UI.confirm = null;
+    UI.scroll = window.scrollY;
     render();
   },
   cwrowdel: function(t){
@@ -2488,12 +2552,23 @@ var ACT = {
     var key = t.getAttribute("data-rowkey");
     cw.rows = cw.rows.filter(function(r){ return r.key !== key; });
     UI.confirm = null;
+    UI.scroll = window.scrollY;
     render();
   },
   cwaddrow: function(){
     var cw = UI.callup; if (!cw || !cw.rows) return;
     captureCallupStep1(); captureCustomRows();
     cw.rows.push({key: uid("row"), kind: "custom", label: "", value: ""});
+    UI.scroll = window.scrollY;
+    render();
+  },
+  cwrestorerow: function(t){
+    var cw = UI.callup; if (!cw || !cw.rows) return;
+    captureCallupStep1(); captureCustomRows();
+    var key = t.getAttribute("data-rowkey");
+    if (cw.rows.some(function(r){ return r.key === key; })) return;
+    cw.rows.push({key: key, kind: INFO_ROW_KIND[key] || "auto"});
+    UI.scroll = window.scrollY;
     render();
   },
   cwaddsquad: function(){
@@ -2501,6 +2576,7 @@ var ACT = {
     captureSquads();
     if (cw.squads.length >= 2) return;
     cw.squads.push({name: "Team " + String.fromCharCode(65 + cw.squads.length), coachIds: [], playerIds: [], keeperId: ""});
+    UI.scroll = window.scrollY;
     render();
   },
   cwremovesquad: function(t){
@@ -2509,6 +2585,7 @@ var ACT = {
     if (cw.squads.length <= 1) return;
     cw.squads.splice(Number(t.getAttribute("data-sq")), 1);
     UI.confirm = null;
+    UI.scroll = window.scrollY;
     render();
   },
   cwsquadcoach: function(t){
@@ -2524,6 +2601,7 @@ var ACT = {
       if (sq.coachIds.length >= 2) { toast("Maximal zwei Trainer pro Team möglich."); return; }
       sq.coachIds.push(id);
     }
+    UI.scroll = window.scrollY;
     render();
   },
   cwsquadplayer: function(t){
@@ -2540,6 +2618,7 @@ var ACT = {
     } else {
       sq.playerIds.push(id);
     }
+    UI.scroll = window.scrollY;
     render();
   },
   cwsquadgk: function(t){
@@ -2549,6 +2628,7 @@ var ACT = {
     var id = t.getAttribute("data-id");
     if (sq.playerIds.indexOf(id) < 0) return;
     sq.keeperId = (sq.keeperId === id) ? "" : id;
+    UI.scroll = window.scrollY;
     render();
   },
   cwcoach: function(t){
@@ -2562,6 +2642,7 @@ var ACT = {
       if (cw.coachIds.length >= 2) { toast("Maximal zwei Trainer möglich."); return; }
       cw.coachIds.push(id);
     }
+    UI.scroll = window.scrollY;
     render();
   },
   cwplayer: function(t){
@@ -2575,6 +2656,7 @@ var ACT = {
       if (cw.playerIds.length >= 14) { toast("Maximal 14 Spieler möglich."); return; }
       cw.playerIds.push(id);
     }
+    UI.scroll = window.scrollY;
     render();
   },
   cwgk: function(t){
@@ -2582,20 +2664,23 @@ var ACT = {
     var id = t.getAttribute("data-id");
     if (cw.playerIds.indexOf(id) < 0) return;
     cw.keeperId = (cw.keeperId === id) ? "" : id;
+    UI.scroll = window.scrollY;
     render();
   },
   cwguestadd: function(){
     var cw = UI.callup; if (!cw) return;
     captureSquads();
     var name = val("cw-gname"), team = val("cw-gteam");
-    if (!name) return;
+    if (!name) { toast("Bitte einen Namen eingeben."); return; }
     cw.guests.push({name: name, team: team});
+    UI.scroll = window.scrollY;
     render();
   },
   cwguestdel: function(t){
     var cw = UI.callup; if (!cw) return;
     captureSquads();
     cw.guests.splice(Number(t.getAttribute("data-idx")), 1);
+    UI.scroll = window.scrollY;
     render();
   },
   cwsave: function(){

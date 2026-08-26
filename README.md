@@ -99,7 +99,8 @@ statt die Arbeit des anderen zu überschreiben.
 - Die Angaben im Aufgebot (Wann, Besammlungszeit/-ort, Adresse, Mitnehmen, …) lassen
   sich per Griff-Symbol frei sortieren und um eigene Zusatzfelder (Bezeichnung +
   Text) ergänzen oder wieder löschen – die gewählte Reihenfolge erscheint genauso
-  im Ausdruck
+  im Ausdruck. Versehentlich gelöschte Standardfelder lassen sich mit einem
+  Klick wiederherstellen, ohne dass dabei etwas verloren geht
 - Ergebnis ist ein fertiges Aufgebot im Look der bisherigen Papier-Vorlage, druckbar
   bzw. als PDF sicherbar wie der Anwesenheitsbericht
 - Bereits erstellte Aufgebote lassen sich jederzeit wieder öffnen und anpassen

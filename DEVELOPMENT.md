@@ -61,7 +61,13 @@ Der Admin-PIN ist eine reine Bequemlichkeitssperre gegen versehentliche
   `<style id="app-style">`, die gesamte Logik im `<script id="app-code">`. Der
   Zustand wird nach der Team- und PIN-Wahl einmal vom Server geladen und im
   Speicher gehalten (`DB`). Jede Änderung schickt den **kompletten** Zustand
-  des aktuell gewählten Teams zurück.
+  des aktuell gewählten Teams zurück. Die Google-Fonts-`<link
+  rel="stylesheet">` im `<head>` lädt bewusst **nicht blockierend**
+  (`media="print" onload="this.media='all'"`, `<noscript>`-Fallback): eine
+  normale `<link rel=stylesheet>` vor den `<script>`-Tags würde deren
+  Ausführung anhalten, bis die Schrift antwortet – bei langsamem/blockiertem
+  Netz (Firmen-WLAN, Ad-Blocker, Google-Ausfall) bliebe die Seite sonst
+  minuten­lang weiss, statt sofort mit Systemschrift zu erscheinen.
 - **Konfiguration** (`docs/config.js`): setzt `window.TP_CONFIG.teams` – eine
   Liste von Teams, jedes mit eigener `apiUrl`. Einzige betreiberspezifische
   Datei. Siehe §3a.
@@ -70,7 +76,11 @@ Der Admin-PIN ist eine reine Bequemlichkeitssperre gegen versehentliche
   `_daten` und rendert daraus lesbare Blätter für den Excel-Export. **Kennt
   keine Teams** – jede Bereitstellung von `Code.gs` bedient genau EIN Team
   (eine Tabelle). Mehrere Teams entstehen durch mehrere unabhängige
-  Bereitstellungen desselben, unveränderten Skripts.
+  Bereitstellungen desselben, unveränderten Skripts. `put()` (schreibt ein
+  Blatt) ruft bewusst **kein** `autoResizeColumns()` mehr auf – eine
+  bekannt langsame Apps-Script-API, die bei JEDER Speicherung für JEDES Blatt
+  gelaufen wäre, inklusive jedem einzelnen Trainer-Verfügbarkeits-Tipp in der
+  Planung (`commitAvailability`).
 - **Persistenz**: die „Datenbank" ist eine Google-Tabelle. Der maßgebliche
   Zustand liegt als **ein** JSON-String im Blatt `_daten`, über mehrere Zellen
   verteilt (max. `CHUNK` Zeichen pro Zelle). Die übrigen Blätter sind ein
@@ -339,6 +349,10 @@ entsprechend 3 Schritte (Treffpunkt/Trainer/Spieler) oder 2
 (Treffpunkt/Teams, `callupStepSquads()`); `ACT.cwsave` schreibt dieselbe Form
 in `DB.callups[]`. Ein Spieler kann nicht gleichzeitig in zwei Teams gewählt
 werden (Prüfung in `ACT.cwsquadplayer`, `usedElsewhere` in der Anzeige).
+`newCallupState()` behandelt ein bestehendes Aufgebot der jeweils ANDEREN
+Form (z. B. `squads` statt `coachIds`/`playerIds`, wenn `callupMode` nach dem
+Speichern geändert wurde) defensiv wie "kein bestehendes Aufgebot" statt
+`undefined.slice()` auszulösen.
 
 - **Ablauf**: `adminCallups()` listet alle `singles` mit `type === "match"`;
   Antippen öffnet `viewCallupWizard()` mit `UI.callup` (Entwurf, nur im
@@ -403,7 +417,11 @@ werden (Prüfung in `ACT.cwsquadplayer`, `usedElsewhere` in der Anzeige).
   einer Zeile (`ACT.cwrowdel`) entfernt sie nur aus der Liste – bei
   `"field"`-Zeilen bleibt der zugrunde liegende Wert (z. B. `venueAddress`
   für die Fahrzeit-Berechnung) unangetastet, auch wenn die Zeile selbst
-  nicht mehr gedruckt wird.
+  nicht mehr gedruckt wird. Da dadurch kein Wert verloren geht, zeigt
+  `renderInfoRows()` unterhalb der Liste für jedes fehlende eingebaute Feld
+  einen "+ … wiederherstellen"-Button (`ACT.cwrestorerow`) – kein
+  Sicherheitsabfrage-Rückgängig nötig, da versehentliches Löschen risikolos
+  ist.
 - **Reihenfolge per Ziehen** (`rowDragStart/-Move/-End`, `ROWDRAG`):
   bewusst kein HTML5-Drag&Drop (auf iOS/Touch unzuverlässig), sondern
   Pointer Events auf dem Griff-Icon (`data-drag-handle`, delegiert via
@@ -412,7 +430,19 @@ werden (Prüfung in `ACT.cwsquadplayer`, `usedElsewhere` in der Anzeige).
   passend mit) – `cw.rows` wird erst beim Loslassen tatsächlich umsortiert
   und einmal neu gerendert. Grund: `render()` ersetzt bei jedem Aufruf das
   komplette DOM (`innerHTML`); ein Re-Render mitten im Ziehen würde den
-  gehaltenen Knoten (`ROWDRAG.row`) verwaisen lassen.
+  gehaltenen Knoten (`ROWDRAG.row`) verwaisen lassen. Ziel-Index beim Ziehen
+  wird über die **tatsächlich gemessene** Position/Höhe jeder Zeile bestimmt
+  (nächstgelegene ursprüngliche Zeilenmitte), nicht über eine angenommene
+  einheitliche Zeilenhöhe – die Liste enthält unterschiedlich hohe Zeilen
+  (z. B. zweizeilige Zusatzfelder) und einen CSS-Gap zwischen den Zeilen.
+- **Scroll-Position bleibt beim Antippen erhalten**: jeder Wizard-Handler, der
+  während eines laufenden Auswahlvorgangs neu rendert (Spieler/Trainer
+  an-/abwählen, Feld sperren/entsperren/löschen, Zeile hinzufügen/löschen/
+  verschieben, Gastspieler hinzufügen/entfernen), setzt vorher
+  `UI.scroll = window.scrollY`, sonst springt `render()` beim Neuaufbau des
+  DOM zurück an den Seitenanfang – störend beim Durchtippen einer langen
+  Spielerliste. Nur echte Schrittwechsel (`cwnext`/`cwsave`, wie `go()`
+  anderswo) scrollen bewusst nach oben.
 - **Keine Trainer-Telefonnummern**: gemäss Datensparsamkeits-Grundsatz (siehe
   Abschnitt "Bewusste Nicht-Ziele"/`README.md`) absichtlich nicht im Aufgebot
   enthalten, obwohl die Papiervorlagen sie teils hatten.
@@ -482,7 +512,15 @@ zentralen Delegat-Handler auf `data-act`-Attribute (`ACT`-Objekt).
 - `DB` – aktueller Zustand (nach Login), `REV` – zugehörige Revision.
 - `PIN` – App-PIN dieser Sitzung; `UNLOCKED`/`ADMIN_OK` – Freischalt-Flags.
 - `UI` – Ansichts-/Filterzustand (`view`, `occ`, `statType`, `adminTab`, …),
-  wird teilweise in `sessionStorage` gespiegelt.
+  wird teilweise in `sessionStorage` gespiegelt. `UI.callup` (der
+  Aufgebot-Wizard-Entwurf) wird bewusst **nicht** gespiegelt – ein
+  unfertiger, ungespeicherter Entwurf soll nach einem Neuladen nicht so tun,
+  als wäre er noch da. Da `UI.view` aber sehr wohl gespiegelt wird, prüft
+  `render()` bei jedem Aufruf zuerst `UI.view === "callup" && !UI.callup` und
+  springt in diesem Fall zur Aufgebote-Liste zurück – sonst würde ein
+  Neuladen mitten im Wizard fälschlich "Dieser Wettkampftag wurde gelöscht"
+  anzeigen. `UI.callupPrintId` (fertige Druckansicht) wird dagegen gespiegelt,
+  da dort nichts Unfertiges verloren gehen kann.
 - `CFG` – aus `config.js`.
 
 **Ablauf**
@@ -515,6 +553,13 @@ zentralen Delegat-Handler auf `data-act`-Attribute (`ACT`-Objekt).
    nacheinander"-Charakter wie die Trainer-Planung sollten
    `commitAvailability()`/`runAvailabilitySaveLoop()` als Vorlage nehmen
    statt `commit()` anzufassen.
+   - Bei einem sonstigen Fehler (z. B. kurzer Netzausfall, nicht `conflict`/
+     `pin`) bleiben nicht gespeicherte Tipps in `AVAIL_PENDING` stehen und
+     würden ohne einen weiteren Tipp sonst unbemerkt dauerhaft ungespeichert
+     bleiben. `scheduleAvailRetry()` löst nach 4 s automatisch einen
+     erneuten `runAvailabilitySaveLoop()`-Durchlauf aus, sofern die
+     Warteschlange noch nicht leer ist – deckt den häufigen Fall (Netz kurz
+     weg) ab, ohne bei einem echten/dauerhaften Fehler den Server zu fluten.
 
 **Schichten der Funktionen** (Auswahl, alle in `index.html`)
 
@@ -562,7 +607,11 @@ minimiert sind (Vorname + Initiale + Anwesenheit). Trotzdem gelten feste Regeln:
   beginnen, als Text, bevor sie ins Blatt geschrieben werden. `q()` (Frontend)
   tut dasselbe für den CSV-Export.
 - **Eingabegrenzen**: `MAX_BODY`, `MAX_PLAYERS`, `MAX_COACHES`, `MAX_RECORDS`,
-  `validateState()`.
+  `validateState()`. `MAX_BODY` ist grosszügig bemessen (3'000'000 Zeichen):
+  jede Speicherung überträgt den **gesamten** Datenbestand (keine
+  Delta-Übertragung), der mit jedem Termin/jeder Saison weiterwächst – ein zu
+  knapper Wert hätte nach wenigen Saisons jede weitere Speicherung dauerhaft
+  blockiert.
 - **Zeitkonstanter PIN-Vergleich**: `equalsConst()`.
 
 **Bekannte, akzeptierte Restrisiken** (nicht „Bugs"):
