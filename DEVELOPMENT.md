@@ -355,18 +355,26 @@ Speichern geändert wurde) defensiv wie "kein bestehendes Aufgebot" statt
 `undefined.slice()` auszulösen.
 
 - **Ablauf**: `adminCallups()` listet alle `singles` mit `type === "match"`;
-  Antippen öffnet `viewCallupWizard()` mit `UI.callup` (Entwurf, nur im
-  Speicher, nicht Teil von `DB`). `ACT.cwsave` schreibt Entwurf → `DB.singles[]
+  Antippen ruft `ACT.callupview` auf, das je nach `callupForMatch()` entweder
+  direkt `viewCallupPrint()` zeigt (Aufgebot existiert bereits – "Bearbeiten"
+  dort führt via `ACT.callupopen` in den Wizard) oder `viewCallupWizard()` mit
+  `UI.callup` (neuer Entwurf, nur im Speicher, nicht Teil von `DB`) öffnet.
+  So reicht ein Antippen für die Vorschau, statt jedes Mal den ganzen Wizard
+  durchklicken zu müssen. `ACT.cwsave` schreibt Entwurf → `DB.singles[]
   .{opponent,homeAway,venueAddress}` (`homeAway` nur bei `"match"`) und
   `DB.callups[]` in einem `commit()`, danach Sprung zu `viewCallupPrint()`
   (druckbare Ansicht, `data-act="print"` wie beim bestehenden Bericht via
   `window.print()`).
-- **Treffpunkt-Vorschlag** (`proposeMeetTime()`): 1 Stunde vor Anpfiff am
-  Spielort; bei Auswärtsspielen (bzw. immer im Turnier-Modus) zusätzlich
-  abzüglich der Fahrzeit ab Bülach, Treffpunkt dann fix `awayMeetPlace()`
-  (= `settings.awayMeetPlace`, sonst Standardtext "Militärparkplatz Bülach")
-  statt der Spielortadresse. Beide Vorschläge sind frei überschreibbar
-  (`cw-meetplace`/`cw-meettime`).
+- **Treffpunkt-Vorschlag** (`proposeMeetTime()`, ausgelöst über `ACT.cwrecalc`):
+  1 Stunde vor Anpfiff am Spielort; bei Auswärtsspielen (bzw. immer im
+  Turnier-Modus) zusätzlich abzüglich der Fahrzeit ab Bülach, Treffpunkt dann
+  fix `awayMeetPlace()` (= `settings.awayMeetPlace`, sonst Standardtext
+  "Militärparkplatz Bülach") statt der Spielortadresse. Beide Vorschläge sind
+  frei überschreibbar (`cw-meetplace`/`cw-meettime`). Die Neuberechnung läuft
+  automatisch bei jeder Änderung von Heim/Auswärts oder der Fahrzeit (globaler
+  `change`-Listener auf `#cw-ha`/`#cw-travel`, bewusst `change` statt `input`,
+  damit ein Neu-Rendern nicht mitten im Tippen den Fokus verliert) – kein
+  eigener "neu vorschlagen"-Button mehr nötig.
 - **Fahrzeit-Wiederverwendung**: `DB.venues` speichert die Fahrzeit einmalig
   pro Adresse (`venueFor()`, Vergleich getrimmt/kleingeschrieben); `cwsave`
   legt einen Eintrag an oder aktualisiert ihn. Bewusst KEINE
@@ -449,6 +457,20 @@ Speichern geändert wurde) defensiv wie "kein bestehendes Aufgebot" statt
 - **Logo**: kommt aus `TEAM.logo` (`docs/config.js`, optional, data-URI) –
   NICHT Teil des Datenbestands, da es sich nicht pro Speicherung ändert und
   sonst bei jeder Anfrage mitübertragen würde.
+- **Einzeltermin-Formular ist `callupMode`-abhängig beschriftet**
+  (`adminPlan()`): bei `"tournament"`-Teams heisst das Feld "Turnier-
+  Bezeichnung (für Aufgebot)" statt "Gegner (für Aufgebot)" und das
+  Heim/Auswärts-Feld (`#s-ha`) wird ganz ausgeblendet (`val("s-ha")` liefert
+  dann `""`, `ACT.addsingle` fällt auf `"away"` zurück) – ohne diese
+  Anpassung blieb das Feld bei Turnier-Teams oft leer, weil "Gegner" für ein
+  Turnier keinen Sinn ergibt.
+- **Druckvorlage: feste, geräteunabhängige Breite** (`@media print .app{max-
+  width:180mm}` statt `max-width:none`): ohne festen Wert reflowt der Text
+  beim Drucken vom Computer aus über die volle (oft sehr breite) Browser-
+  fenster-Breite und quetscht den gesamten Ausdruck in wenigen, breiten
+  Zeilen ins obere Seitendrittel – auf dem Handy fällt das nicht auf, da der
+  schmale Bildschirm ohnehin schon so schmal ist. `@page{margin:38pt 40pt}`
+  legt die Seitenränder fest.
 
 ---
 
@@ -579,7 +601,13 @@ zentralen Delegat-Handler auf `data-act`-Attribute (`ACT`-Objekt).
 **PIN-Eingabe:** `addDigit()` sammelt Ziffern. Der **App-PIN** hat unbekannte
 Länge und wird erst mit „Weiter"/Enter abgeschickt; der **Admin-PIN** hat
 bekannte Länge und wird automatisch geprüft. Tastatur (Ziffern, Backspace,
-Enter) wird unterstützt.
+Enter) wird unterstützt. `viewLock("app")` ersetzt beim Aufruf das komplette
+`#root` (volle `100dvh`, daher zentriert `.lock` dort korrekt), während
+`viewLock("admin")` innerhalb von `<main class="app">` zwischen Kopfzeile und
+unterer Navigation erscheint – dort bekommt `.lock` zusätzlich die Klasse
+`.lock-nested` (kleineres `min-height`), sonst zählt `100dvh` Kopfzeile und
+Navigation quasi doppelt und schiebt die PIN-Karte sichtbar nach unten aus
+der Mitte.
 
 **CSS/Theme:** Design-Tokens als CSS-Variablen; Light/Dark über
 `prefers-color-scheme` **und** `[data-theme]`. Druck-Styles im `@media print`.
