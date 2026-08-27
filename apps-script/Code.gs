@@ -83,6 +83,16 @@ function handle(p) {
       incoming.rev = Number(state.rev || 0) + 1;
       savePins(incoming, pins);            // neue PIN ggf. in die Eigenschaften uebernehmen
       writeState(stripPins(incoming));     // im Blatt landet die PIN nie
+      // Sperre HIER schon freigeben: renderSheets() schreibt mehrere lesbare
+      // Blaetter (Kader/Trainer/Auswertung/Termine/Aufgebote/Matrix/Legende)
+      // und ist dadurch der mit Abstand langsamste Teil einer Speicherung.
+      // Liefe das noch innerhalb der Sperre, wuerde es jede andere Anfrage
+      // (auch ein simples Einloggen/"load") fuer die gesamte Dauer blockieren -
+      // obwohl renderSheets() nie von readState() gelesen wird (das liest nur
+      // das Blatt "_daten", welches an dieser Stelle bereits sicher geschrieben
+      // ist). Die eigentlich schuetzenswerte Operation (writeState) ist hier
+      // bereits abgeschlossen.
+      lock.releaseLock(); released = true;
       try { renderSheets(incoming); } catch (err) { /* Darstellung darf das Speichern nie verhindern */ }
       return { ok: true, rev: incoming.rev };
     }
