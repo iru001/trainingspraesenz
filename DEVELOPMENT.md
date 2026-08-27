@@ -391,9 +391,19 @@ Freitext raten; die muss einmalig in "Termine" nachgetragen werden.
   anzulegen) – dadurch ist ein Aufgebot jederzeit nachträglich anpassbar,
   ohne Duplikate zu erzeugen. Wechselt `callupMode` nachträglich, räumt
   `cwsave` die Felder der jeweils anderen Form ab (kein Mischzustand).
-- **`keeperId`**: markiert den Torhüter NUR für dieses eine Aufgebot bzw. Team
-  (nicht am Spieler selbst) – dieselbe Person kann im nächsten Aufgebot ohne
-  Sonderbehandlung wieder als Feldspieler erscheinen.
+- **`keeperIds`** (Array, vor der Mehrfachauswahl `keeperId` als einzelner
+  String): markiert Torhüter NUR für dieses eine Aufgebot bzw. Team (nicht am
+  Spieler selbst) – dieselbe Person kann im nächsten Aufgebot ohne
+  Sonderbehandlung wieder als Feldspieler erscheinen. Beliebig viele Spieler
+  gleichzeitig markierbar (keine künstliche Obergrenze) – z. B. wenn sich
+  zwei Torhüter ein Spiel teilen oder ein Ersatztorhüter mit aufgeführt
+  werden soll. `existingKeeperIds(x)`/`isKeeper(holder, pid)` lesen sowohl
+  das neue `keeperIds`-Array als auch das ältere einzelne `keeperId`-Feld
+  (Fallback `[keeperId]`), damit vor diesem Umbau gespeicherte Aufgebote ohne
+  Migration weiter korrekt funktionieren – sowohl im Frontend
+  (`docs/index.html`) als auch im Apps-Script-Backend beim Rendern des
+  Aufgebote-Blatts (`apps-script/Code.gs`, **erfordert manuelles Redeploy pro
+  Team**, siehe Abschnitt 8).
 - **`guests`**: Freitext (Name + optional Team), für Spieler aus anderen
   Teams, die punktuell aushelfen – bewusst kein Verweis auf `players`, da sie
   nicht zum eigenen Kader gehören und keine eigene Anwesenheitsstatistik

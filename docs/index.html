@@ -922,6 +922,16 @@ function callupForMatch(matchId){
 function proposeMeetTime(kickoff, homeAway, travelMinutes){
   return subtractMinutes(kickoff, 60 + (homeAway === "away" ? (Number(travelMinutes) || 0) : 0));
 }
+// Torhueter: beliebig viele pro Aufgebot/Team moeglich (keeperIds, Array).
+// Aeltere gespeicherte Aufgebote kennen noch das fruehere einzelne Feld
+// keeperId - hier als Array mit hoechstens einem Eintrag gelesen, damit alte
+// Daten ohne Migration weiter funktionieren.
+function existingKeeperIds(x){
+  return (x && (x.keeperIds || (x.keeperId ? [x.keeperId] : []))) || [];
+}
+function isKeeper(holder, pid){
+  return existingKeeperIds(holder).indexOf(pid) >= 0;
+}
 function newCallupState(matchId){
   var mode = callupMode();
   var m = byId(DB.singles, matchId) || {};
@@ -933,8 +943,8 @@ function newCallupState(matchId){
     var tmeetPlace = ex ? ex.meetPlace : awayMeetPlace();
     var tmeetTime = ex ? ex.meetTime : (m.time ? proposeMeetTime(m.time, "away", ttravel) : "");
     var squads = (ex && ex.squads && ex.squads.length) ? ex.squads.map(function(sq){
-      return {name: sq.name || "", coachIds: (sq.coachIds || []).slice(), playerIds: (sq.playerIds || []).slice(), keeperId: sq.keeperId || ""};
-    }) : [{name: "Team A", coachIds: myCoachId() ? [myCoachId()] : [], playerIds: [], keeperId: ""}];
+      return {name: sq.name || "", coachIds: (sq.coachIds || []).slice(), playerIds: (sq.playerIds || []).slice(), keeperIds: existingKeeperIds(sq).slice()};
+    }) : [{name: "Team A", coachIds: myCoachId() ? [myCoachId()] : [], playerIds: [], keeperIds: []}];
     return {
       matchId: matchId, step: 1, mode: "tournament",
       // Faellt auf die allgemeine "Bezeichnung" des Termins zurueck, wenn die
@@ -975,7 +985,7 @@ function newCallupState(matchId){
     // "kein bestehendes Aufgebot" behandeln, statt auf undefined.slice() abzustuerzen.
     coachIds: (ex && ex.coachIds) ? ex.coachIds.slice() : (myCoachId() ? [myCoachId()] : []),
     playerIds: (ex && ex.playerIds) ? ex.playerIds.slice() : [],
-    keeperId: (ex && ex.keeperId) || "",
+    keeperIds: existingKeeperIds(ex).slice(),
     guests: ex ? ex.guests.map(function(g){ return {name: g.name, team: g.team}; }) : [],
     rows: (ex && ex.rows && ex.rows.length) ? cloneInfoRows(ex.rows) : defaultInfoRows(),
     unlocked: {}
@@ -1709,11 +1719,11 @@ function callupStepSquads(cw){
         return '<button class="coach" data-act="cwsquadcoach" data-sq="' + i + '" data-id="' + c.id + '" aria-pressed="' + on + '">' + (on ? ICON.check : "") + esc(fullName(c)) + "</button>";
       }).join("") + "</div>"
       : '<div class="card empty">Noch keine Trainer erfasst. <button class="btn btn-sm" data-act="go" data-view="admin" data-tab="coaches" style="margin-top:10px">Trainer anlegen</button></div>';
-    h += '<p class="small muted" style="margin:14px 0 8px">Spieler &ndash; antippen wählt aus/ab, <b>TW</b> markiert den Torhüter</p>';
+    h += '<p class="small muted" style="margin:14px 0 8px">Spieler &ndash; antippen wählt aus/ab, <b>TW</b> markiert Torhüter (auch mehrere möglich)</p>';
     h += players.length ? '<div class="card">' + players.map(function(p){
         var blocked = usedElsewhere[p.id];
         var on = sq.playerIds.indexOf(p.id) >= 0;
-        var gk = sq.keeperId === p.id;
+        var gk = isKeeper(sq, p.id);
         return '<div class="item cwitem' + (on ? " sel" : "") + '">'
           + '<button class="grow" data-act="cwsquadplayer" data-sq="' + i + '" data-id="' + p.id + '" aria-pressed="' + on + '"' + (blocked ? " disabled" : "") + ' style="text-align:left;background:none;border:0;padding:0;font:inherit;color:inherit;cursor:pointer">'
           + (on ? ICON.check : "") + "<b>" + esc(p.first) + "</b> " + esc(p.last) + (blocked ? ' <span class="muted small">bereits in anderem Team</span>' : "") + "</button>"
@@ -1758,11 +1768,11 @@ function callupStep2(cw){
 
 function callupStep3(cw){
   var players = activePlayers();
-  var h = '<p class="small muted" style="margin:0 0 4px">Antippen wählt aus/ab &middot; <b>TW</b> markiert den Torhüter für dieses Aufgebot.</p>'
+  var h = '<p class="small muted" style="margin:0 0 4px">Antippen wählt aus/ab &middot; <b>TW</b> markiert Torhüter für dieses Aufgebot (auch mehrere möglich).</p>'
     + '<div class="eyebrow">Ausgewählt: ' + cw.playerIds.length + ' / 14</div>';
   h += players.length ? '<div class="card">' + players.map(function(p){
       var on = cw.playerIds.indexOf(p.id) >= 0;
-      var gk = cw.keeperId === p.id;
+      var gk = isKeeper(cw, p.id);
       return '<div class="item cwitem' + (on ? " sel" : "") + '">'
         + '<button class="grow" data-act="cwplayer" data-id="' + p.id + '" aria-pressed="' + on + '" style="text-align:left;background:none;border:0;padding:0;font:inherit;color:inherit;cursor:pointer">'
         + (on ? ICON.check : "") + "<b>" + esc(p.first) + "</b> " + esc(p.last) + "</button>"
@@ -1824,7 +1834,7 @@ function viewCallupPrint(){
     cu.squads.forEach(function(sq, i){
       var names = sq.playerIds.map(function(pid){
         var p = byId(DB.players, pid); if (!p) return null;
-        return fullName(p) + (sq.keeperId === pid ? " (TW)" : "");
+        return fullName(p) + (isKeeper(sq, pid) ? " (TW)" : "");
       }).filter(Boolean);
       if (i === 0) cu.guests.forEach(function(g){ names.push(g.name + (g.team ? " (" + g.team + ")" : "")); });
       h += '<div class="ca-lbl" style="margin-bottom:6px">' + esc(teamName) + " " + esc(sq.name || "Team " + (i + 1)) + ":</div>"
@@ -1833,7 +1843,7 @@ function viewCallupPrint(){
   } else {
     var names = cu.playerIds.map(function(pid){
       var p = byId(DB.players, pid); if (!p) return null;
-      return fullName(p) + (cu.keeperId === pid ? " (TW)" : "");
+      return fullName(p) + (isKeeper(cu, pid) ? " (TW)" : "");
     }).filter(Boolean);
     cu.guests.forEach(function(g){ names.push(g.name + (g.team ? " (" + g.team + ")" : "")); });
     h += '<div class="ca-lbl" style="margin-bottom:6px">Aufgebot für:</div><ol>' + names.map(function(n){ return "<li>" + esc(n) + "</li>"; }).join("") + "</ol>";
@@ -2681,7 +2691,7 @@ var ACT = {
     var cw = UI.callup; if (!cw || !cw.squads) return;
     captureSquads();
     if (cw.squads.length >= 2) return;
-    cw.squads.push({name: "Team " + String.fromCharCode(65 + cw.squads.length), coachIds: [], playerIds: [], keeperId: ""});
+    cw.squads.push({name: "Team " + String.fromCharCode(65 + cw.squads.length), coachIds: [], playerIds: [], keeperIds: []});
     UI.scroll = window.scrollY;
     render();
   },
@@ -2720,7 +2730,7 @@ var ACT = {
     var on = sq.playerIds.indexOf(id) >= 0;
     if (on) {
       sq.playerIds = sq.playerIds.filter(function(x){ return x !== id; });
-      if (sq.keeperId === id) sq.keeperId = "";
+      sq.keeperIds = sq.keeperIds.filter(function(x){ return x !== id; });
     } else {
       sq.playerIds.push(id);
     }
@@ -2733,7 +2743,8 @@ var ACT = {
     var sq = cw.squads[Number(t.getAttribute("data-sq"))]; if (!sq) return;
     var id = t.getAttribute("data-id");
     if (sq.playerIds.indexOf(id) < 0) return;
-    sq.keeperId = (sq.keeperId === id) ? "" : id;
+    var idx = sq.keeperIds.indexOf(id);
+    if (idx >= 0) sq.keeperIds.splice(idx, 1); else sq.keeperIds.push(id);
     UI.scroll = window.scrollY;
     render();
   },
@@ -2757,7 +2768,7 @@ var ACT = {
     var on = cw.playerIds.indexOf(id) >= 0;
     if (on) {
       cw.playerIds = cw.playerIds.filter(function(x){ return x !== id; });
-      if (cw.keeperId === id) cw.keeperId = "";
+      cw.keeperIds = cw.keeperIds.filter(function(x){ return x !== id; });
     } else {
       if (cw.playerIds.length >= 14) { toast("Maximal 14 Spieler möglich."); return; }
       cw.playerIds.push(id);
@@ -2769,7 +2780,8 @@ var ACT = {
     var cw = UI.callup; if (!cw) return;
     var id = t.getAttribute("data-id");
     if (cw.playerIds.indexOf(id) < 0) return;
-    cw.keeperId = (cw.keeperId === id) ? "" : id;
+    var idx = cw.keeperIds.indexOf(id);
+    if (idx >= 0) cw.keeperIds.splice(idx, 1); else cw.keeperIds.push(id);
     UI.scroll = window.scrollY;
     render();
   },
@@ -2807,12 +2819,12 @@ var ACT = {
     var payload = isT ? {
       opponent: cw.opponent, venueAddress: cw.venueAddress, travelMinutes: cw.travelMinutes,
       meetPlace: cw.meetPlace, meetTime: cw.meetTime, rows: rows,
-      squads: cw.squads.map(function(sq){ return {name: sq.name, coachIds: sq.coachIds.slice(), playerIds: sq.playerIds.slice(), keeperId: sq.keeperId}; }),
+      squads: cw.squads.map(function(sq){ return {name: sq.name, coachIds: sq.coachIds.slice(), playerIds: sq.playerIds.slice(), keeperIds: sq.keeperIds.slice()}; }),
       guests: cw.guests.map(function(g){ return {name: g.name, team: g.team}; })
     } : {
       opponent: cw.opponent, homeAway: cw.homeAway, venueAddress: cw.venueAddress,
       travelMinutes: cw.travelMinutes, meetPlace: cw.meetPlace, meetTime: cw.meetTime, rows: rows,
-      coachIds: cw.coachIds.slice(), playerIds: cw.playerIds.slice(), keeperId: cw.keeperId,
+      coachIds: cw.coachIds.slice(), playerIds: cw.playerIds.slice(), keeperIds: cw.keeperIds.slice(),
       guests: cw.guests.map(function(g){ return {name: g.name, team: g.team}; })
     };
     commit(function(db){
@@ -2832,9 +2844,9 @@ var ACT = {
       var fields = isT
         ? {meetPlace: payload.meetPlace, meetTime: payload.meetTime, travelMinutes: payload.travelMinutes, rows: payload.rows, squads: payload.squads, guests: payload.guests}
         : {meetPlace: payload.meetPlace, meetTime: payload.meetTime, travelMinutes: payload.travelMinutes, rows: payload.rows,
-           coachIds: payload.coachIds, playerIds: payload.playerIds, keeperId: payload.keeperId, guests: payload.guests};
+           coachIds: payload.coachIds, playerIds: payload.playerIds, keeperIds: payload.keeperIds, guests: payload.guests};
       if (existing) {
-        delete existing.squads; delete existing.coachIds; delete existing.playerIds; delete existing.keeperId;
+        delete existing.squads; delete existing.coachIds; delete existing.playerIds; delete existing.keeperId; delete existing.keeperIds;
         for (var k in fields) existing[k] = fields[k];
       } else {
         fields.id = uid("cu"); fields.matchId = matchId;
