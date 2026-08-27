@@ -164,7 +164,7 @@ button{cursor:pointer}
 .rowhandle svg{width:17px;height:17px;stroke:currentColor;fill:none;stroke-width:1.9;stroke-linecap:round}
 .rowdrag-active .rowhandle{cursor:grabbing;color:var(--ink)}
 
-label.f{display:flex;flex-direction:column;gap:5px;font-size:13px;font-weight:600;color:var(--ink-2);flex:1;min-width:0}
+label.f,div.f{display:flex;flex-direction:column;gap:5px;font-size:13px;font-weight:600;color:var(--ink-2);flex:1;min-width:0}
 input[type=text],input[type=date],input[type=time],input[type=number],select,textarea{
   width:100%;background:var(--surface);border:1px solid var(--line-2);border-radius:var(--r-s);
   padding:10px 12px;font-size:16px;font-weight:400;color:var(--ink);min-height:44px;
@@ -210,7 +210,7 @@ button.item:first-child{border-top:0}
 .capaper{background:#fff;color:#1a1a1a;border-radius:var(--r);box-shadow:var(--shadow);padding:26px 24px;font-size:13.5px;line-height:1.6}
 .capaper .ca-head{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;margin-bottom:16px}
 .capaper h2{font-family:"Source Sans 3",sans-serif;font-size:16px;font-weight:700;margin:0 0 8px}
-.capaper .ca-logo{width:100px;flex:none}
+.capaper .ca-logo{width:175px;flex:none}
 .capaper .ca-logo img{width:100%;display:block}
 .capaper .ca-lbl{font-weight:700}
 .capaper ol,.capaper ul{margin:8px 0 20px;padding-left:24px}
@@ -438,9 +438,16 @@ table.grid td.num{text-align:right;font-variant-numeric:tabular-nums}
      Browserfenster-Breite - wenige, sehr breite Zeilen quetschen den
      gesamten Inhalt ins obere Seitendrittel. Auf dem Handy faellt das nicht
      auf, da der schmale Bildschirm ohnehin schon so schmal ist. Ein fester
-     mm-Wert sorgt dafuer, dass Ausdrucke vom Computer und vom Handy exakt
-     gleich umbrechen. */
-  .app{padding:0 !important;max-width:180mm;margin:0 auto}
+     Wert sorgt dafuer, dass Ausdrucke vom Computer und vom Handy exakt
+     gleich umbrechen.
+     Die Seitenraender werden bewusst NICHT ueber @page(margin:...) gesetzt -
+     das wird von manchen Browsern/Betriebssystemen beim Drucken (v. a. iOS
+     Safari ueber "Drucken"/PDF sichern) ignoriert und durch eigene
+     Standardraender ersetzt. Stattdessen feste Breite/Innenabstand direkt am
+     Inhalt: A4 ist 210mm breit, abzueglich 40pt links/rechts ergibt die
+     Breite unten; 38pt oben/unten als Innenabstand. Das wirkt unabhaengig
+     vom Drucktreiber immer gleich. */
+  .app{padding:38pt 0 !important;width:calc(210mm - 80pt);max-width:calc(210mm - 80pt);margin:0 auto}
   body{background:#fff}
   .card{box-shadow:none;break-inside:avoid}
   .eyebrow{margin-top:14px}
@@ -448,7 +455,7 @@ table.grid td.num{text-align:right;font-variant-numeric:tabular-nums}
   table.grid th,table.grid td{padding:3px 5px;border-bottom:1px solid #ccc}
   .tblwrap{overflow:visible}
   h2{break-after:avoid}
-  @page{margin:38pt 40pt}
+  @page{margin:0}
 }
 </style>
 </head>
@@ -923,7 +930,14 @@ function newCallupState(matchId){
     }) : [{name: "Team A", coachIds: myCoachId() ? [myCoachId()] : [], playerIds: [], keeperId: ""}];
     return {
       matchId: matchId, step: 1, mode: "tournament",
-      opponent: m.opponent || "",
+      // Faellt auf die allgemeine "Bezeichnung" des Termins zurueck, wenn die
+      // eigene Turnier-Bezeichnung (noch) nicht gesetzt ist - beim Anlegen des
+      // Wettkampftags wird oft nur "Bezeichnung" ausgefuellt (z. B. "PMF
+      // Turnier in Seuzach"), und genau das soll dann auch im Aufgebot
+      // erscheinen statt eines leeren Felds. Bei "match" bewusst NICHT so,
+      // da "Bezeichnung" dort meist einen ganzen Satz enthaelt, der sich
+      // nicht als "Gegner" eignet (siehe adminPlan()).
+      opponent: m.opponent || m.label || "",
       venueAddress: addr, travelMinutes: ttravel, meetPlace: tmeetPlace, meetTime: tmeetTime,
       squads: squads,
       guests: ex ? ex.guests.map(function(g){ return {name: g.name, team: g.team}; }) : [],
@@ -937,7 +951,12 @@ function newCallupState(matchId){
   var meetTime = ex ? ex.meetTime : (m.time ? proposeMeetTime(m.time, away ? "away" : "home", travel) : "");
   return {
     matchId: matchId, step: 1, mode: "match",
-    opponent: m.opponent || "",
+    // Wie bei "tournament": faellt auf die allgemeine "Bezeichnung" des
+    // Termins zurueck, wenn kein eigener Gegner gesetzt ist - bei aelteren,
+    // vor der eigenen Gegner-Erfassung angelegten Terminen steht der Gegner
+    // oft nur als Teil der Bezeichnung ("Spiel gegen FC Muster c"). Besser
+    // ein bearbeitbarer Vorschlag als ein leeres Feld.
+    opponent: m.opponent || m.label || "",
     homeAway: away ? "away" : "home",
     venueAddress: addr,
     travelMinutes: travel,
@@ -1431,10 +1450,16 @@ function renderInfoRows(cw, m){
         : '<input type="text" id="cw-' + key + '" value="' + esc(val) + '">';
       inner = lockedField(cw, key, label, val, inputHtml, true, "cwrowdel", 'data-rowkey="' + key + '"');
     } else {
-      inner = '<label class="f">' + esc(label) + '<span class="lockedf-row">'
+      // Bewusst <div>, nicht <label>: ohne eigenes Bearbeiten-Icon ist die
+      // Muelltonne hier der EINZIGE interaktive Nachfahre - in einem <label>
+      // wuerde ein Klick irgendwo im Text (Browser-Standardverhalten fuer
+      // Labels) automatisch an dieses einzige Element weitergereicht und so
+      // ungewollt sofort die Loeschbestaetigung ausloesen, statt nur beim
+      // gezielten Antippen der Muelltonne selbst.
+      inner = '<div class="f">' + esc(label) + '<span class="lockedf-row">'
         + '<span class="lockedf-val">' + esc(callupRowPreview(cw, m, key) || "–") + '</span>'
         + fieldConfirmRow("cwf-" + key, "cwrowdel", 'data-rowkey="' + esc(key) + '"')
-        + "</span></label>";
+        + "</span></div>";
     }
     return '<div class="rowdrag" data-rowkey="' + esc(key) + '">' + inner
       + '<button class="rowhandle" data-drag-handle title="Reihenfolge ändern (halten und ziehen)" aria-label="Reihenfolge ändern">' + ICON.handle + "</button></div>";

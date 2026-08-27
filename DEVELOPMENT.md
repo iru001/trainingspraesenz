@@ -352,7 +352,14 @@ werden (Prüfung in `ACT.cwsquadplayer`, `usedElsewhere` in der Anzeige).
 `newCallupState()` behandelt ein bestehendes Aufgebot der jeweils ANDEREN
 Form (z. B. `squads` statt `coachIds`/`playerIds`, wenn `callupMode` nach dem
 Speichern geändert wurde) defensiv wie "kein bestehendes Aufgebot" statt
-`undefined.slice()` auszulösen.
+`undefined.slice()` auszulösen. `opponent` (Gegner bzw. Turnier-Bezeichnung)
+fällt dort auf `m.label` (die allgemeine "Bezeichnung" des Termins) zurück,
+wenn kein eigener Wert gesetzt ist – bei älteren, vor der eigenen Gegner-/
+Turnier-Bezeichnung-Erfassung angelegten Terminen steht diese Angabe oft nur
+als Teil der Bezeichnung ("Spiel gegen FC Muster c"). Ein bearbeitbarer
+Vorschlag statt eines leeren Pflichtfelds. Für `venueAddress` gibt es
+dagegen bewusst KEINEN Fallback – eine Adresse lässt sich nicht sinnvoll aus
+Freitext raten; die muss einmalig in "Termine" nachgetragen werden.
 
 - **Ablauf**: `adminCallups()` listet alle `singles` mit `type === "match"`;
   Antippen ruft `ACT.callupview` auf, das je nach `callupForMatch()` entweder
@@ -412,6 +419,16 @@ Speichern geändert wurde) defensiv wie "kein bestehendes Aufgebot" statt
   beim Neuaufbau des DOM verloren (das hätte fast unbemerkt einen
   Datenverlust verursacht, siehe `tournament_ui.mjs`/`callup_ui.mjs` in
   den Tests).
+  **Wichtig 2**: die "auto"/"team"-Zeilen in `renderInfoRows()` (ohne
+  eigenen Wert, daher ohne Stift-Symbol) wickeln ihr Label bewusst in ein
+  `<div class="f">`, NICHT `<label class="f">` – ein `<label>` ohne `for`
+  leitet einen Klick irgendwo im Text (Browser-Standardverhalten) an das
+  EINZIGE darin verschachtelte interaktive Element weiter, und wenn dort
+  keine Bearbeiten-Schaltfläche existiert, ist das die rote Mülltonne. Ohne
+  dieses `<div>` löste jeder Klick auf den Text sofort die Löschbestätigung
+  aus, statt nur ein Klick gezielt auf die Mülltonne selbst. Bei Zeilen MIT
+  Stift-Symbol (`lockedField()`) bleibt es bei `<label>` – dort landet ein
+  Klick auf den Text ohnehin beim (harmlosen) ersten Element, dem Stift.
 - **"Angaben im Aufgebot" sind frei sortierbar und erweiterbar**
   (`cw.rows`/`cu.rows`, Schritt 1): eine Liste aus `{key, kind}` für die
   eingebauten Zeilen (`notcalled`/`wann`/`meettime`/`meetplace`/
@@ -464,13 +481,25 @@ Speichern geändert wurde) defensiv wie "kein bestehendes Aufgebot" statt
   dann `""`, `ACT.addsingle` fällt auf `"away"` zurück) – ohne diese
   Anpassung blieb das Feld bei Turnier-Teams oft leer, weil "Gegner" für ein
   Turnier keinen Sinn ergibt.
-- **Druckvorlage: feste, geräteunabhängige Breite** (`@media print .app{max-
-  width:180mm}` statt `max-width:none`): ohne festen Wert reflowt der Text
-  beim Drucken vom Computer aus über die volle (oft sehr breite) Browser-
-  fenster-Breite und quetscht den gesamten Ausdruck in wenigen, breiten
-  Zeilen ins obere Seitendrittel – auf dem Handy fällt das nicht auf, da der
-  schmale Bildschirm ohnehin schon so schmal ist. `@page{margin:38pt 40pt}`
-  legt die Seitenränder fest.
+- **Druckvorlage: feste, geräteunabhängige Breite** (`@media print .app{...}`
+  statt `max-width:none`): ohne festen Wert reflowt der Text beim Drucken vom
+  Computer aus über die volle (oft sehr breite) Browserfenster-Breite und
+  quetscht den gesamten Ausdruck in wenigen, breiten Zeilen ins obere
+  Seitendrittel – auf dem Handy fällt das nicht auf, da der schmale
+  Bildschirm ohnehin schon so schmal ist.
+  **Seitenränder NICHT über `@page{margin:...}`**: das wird von manchen
+  Browsern/Betriebssystemen beim Drucken ignoriert und durch eigene
+  Standardränder ersetzt (insbesondere iOS Safari über "Drucken"/"Als PDF
+  sichern" – genau dort trat das auf). Stattdessen `@page{margin:0}` plus
+  feste Breite/Innenabstand direkt an `.app`: `width:calc(210mm - 80pt)`
+  (A4-Breite abzüglich 40pt links/rechts) und `padding:38pt 0` (oben/unten).
+  Das wirkt unabhängig vom Drucktreiber immer gleich, weil es normales
+  Box-Layout ist statt sich auf CSS-Paged-Media-Unterstützung zu verlassen.
+  Geht von A4 aus (in der Schweiz Standard) – bei Letter-Papier wäre die
+  Breite falsch bemessen.
+  Das Logo (`.capaper .ca-logo{width:175px}`) ist bewusst 75 % größer als
+  ursprünglich (100px) – beide Teams nutzen dasselbe eingebettete Vereins-
+  logo (`TEAM.logo` in `docs/config.js`), ident für D9b und FA 2018.
 
 ---
 
