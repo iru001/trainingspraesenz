@@ -404,6 +404,17 @@ Freitext raten; die muss einmalig in "Termine" nachgetragen werden.
   (`docs/index.html`) als auch im Apps-Script-Backend beim Rendern des
   Aufgebote-Blatts (`apps-script/Code.gs`, **erfordert manuelles Redeploy pro
   Team**, siehe Abschnitt 8).
+- **`captainId`** (String, im Unterschied zu `keeperIds` bewusst EINZELWERT –
+  ein Team hat genau einen Captain): analoge Schaltfläche "C" neben "TW" in
+  Schritt "Spieler" (`callupStep3`) bzw. je Team in Schritt "Teams"
+  (`callupStepSquads`), Klick auf einen neuen Spieler nimmt einem vorher
+  markierten automatisch die Markierung weg (Einzelauswahl, kein Toggle-Array
+  wie bei `keeperIds`). Captain und Torhüter sind unabhängig voneinander –
+  dieselbe Person kann beides gleichzeitig sein. In der Druckansicht steht
+  " (Captain)" hinter dem Namen, zusätzlich zu einem eventuellen " (TW)".
+  Wird der Captain aus dem Kader abgewählt, verliert er automatisch auch die
+  Captain-Markierung (wie bei `keeperIds`). Ebenfalls im Apps-Script-Backend
+  nachgezogen (**Redeploy pro Team nötig**).
 - **`guests`**: Freitext (Name + optional Team), für Spieler aus anderen
   Teams, die punktuell aushelfen – bewusst kein Verweis auf `players`, da sie
   nicht zum eigenen Kader gehören und keine eigene Anwesenheitsstatistik

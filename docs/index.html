@@ -198,6 +198,7 @@ input::placeholder,textarea::placeholder{color:var(--ink-3)}
 .cwitem .grow svg{width:15px;height:15px;stroke:var(--accent);fill:none;stroke-width:2.6;stroke-linecap:round;stroke-linejoin:round;vertical-align:-2px;margin-right:6px;flex:none}
 .cwitem .tw{border:1px solid var(--line-2);background:var(--surface);border-radius:8px;padding:6px 10px;font-size:11.5px;font-weight:800;font-family:Oswald,sans-serif;letter-spacing:.02em;color:var(--ink-3);flex:none}
 .cwitem .tw[aria-pressed="true"]{background:var(--warn);border-color:var(--warn);color:var(--on-accent)}
+.cwitem .tw.cap[aria-pressed="true"]{background:var(--accent);border-color:var(--accent)}
 .cwitem .tw:disabled{opacity:.35}
 button.item{width:100%;text-align:left;background:none;border:0;border-top:1px solid var(--line);cursor:pointer;font:inherit;color:inherit}
 button.item:first-child{border-top:0}
@@ -943,8 +944,8 @@ function newCallupState(matchId){
     var tmeetPlace = ex ? ex.meetPlace : awayMeetPlace();
     var tmeetTime = ex ? ex.meetTime : (m.time ? proposeMeetTime(m.time, "away", ttravel) : "");
     var squads = (ex && ex.squads && ex.squads.length) ? ex.squads.map(function(sq){
-      return {name: sq.name || "", coachIds: (sq.coachIds || []).slice(), playerIds: (sq.playerIds || []).slice(), keeperIds: existingKeeperIds(sq).slice()};
-    }) : [{name: "Team A", coachIds: myCoachId() ? [myCoachId()] : [], playerIds: [], keeperIds: []}];
+      return {name: sq.name || "", coachIds: (sq.coachIds || []).slice(), playerIds: (sq.playerIds || []).slice(), keeperIds: existingKeeperIds(sq).slice(), captainId: sq.captainId || ""};
+    }) : [{name: "Team A", coachIds: myCoachId() ? [myCoachId()] : [], playerIds: [], keeperIds: [], captainId: ""}];
     return {
       matchId: matchId, step: 1, mode: "tournament",
       // Faellt auf die allgemeine "Bezeichnung" des Termins zurueck, wenn die
@@ -986,6 +987,7 @@ function newCallupState(matchId){
     coachIds: (ex && ex.coachIds) ? ex.coachIds.slice() : (myCoachId() ? [myCoachId()] : []),
     playerIds: (ex && ex.playerIds) ? ex.playerIds.slice() : [],
     keeperIds: existingKeeperIds(ex).slice(),
+    captainId: (ex && ex.captainId) || "",
     guests: ex ? ex.guests.map(function(g){ return {name: g.name, team: g.team}; }) : [],
     rows: (ex && ex.rows && ex.rows.length) ? cloneInfoRows(ex.rows) : defaultInfoRows(),
     unlocked: {}
@@ -1719,15 +1721,17 @@ function callupStepSquads(cw){
         return '<button class="coach" data-act="cwsquadcoach" data-sq="' + i + '" data-id="' + c.id + '" aria-pressed="' + on + '">' + (on ? ICON.check : "") + esc(fullName(c)) + "</button>";
       }).join("") + "</div>"
       : '<div class="card empty">Noch keine Trainer erfasst. <button class="btn btn-sm" data-act="go" data-view="admin" data-tab="coaches" style="margin-top:10px">Trainer anlegen</button></div>';
-    h += '<p class="small muted" style="margin:14px 0 8px">Spieler &ndash; antippen wählt aus/ab, <b>TW</b> markiert Torhüter (auch mehrere möglich)</p>';
+    h += '<p class="small muted" style="margin:14px 0 8px">Spieler &ndash; antippen wählt aus/ab, <b>TW</b> markiert Torhüter (auch mehrere möglich), <b>C</b> markiert den Captain</p>';
     h += players.length ? '<div class="card">' + players.map(function(p){
         var blocked = usedElsewhere[p.id];
         var on = sq.playerIds.indexOf(p.id) >= 0;
         var gk = isKeeper(sq, p.id);
+        var cap = sq.captainId === p.id;
         return '<div class="item cwitem' + (on ? " sel" : "") + '">'
           + '<button class="grow" data-act="cwsquadplayer" data-sq="' + i + '" data-id="' + p.id + '" aria-pressed="' + on + '"' + (blocked ? " disabled" : "") + ' style="text-align:left;background:none;border:0;padding:0;font:inherit;color:inherit;cursor:pointer">'
           + (on ? ICON.check : "") + "<b>" + esc(p.first) + "</b> " + esc(p.last) + (blocked ? ' <span class="muted small">bereits in anderem Team</span>' : "") + "</button>"
-          + '<button class="tw" data-act="cwsquadgk" data-sq="' + i + '" data-id="' + p.id + '" aria-pressed="' + gk + '"' + (on ? "" : " disabled") + '>TW</button></div>';
+          + '<button class="tw" data-act="cwsquadgk" data-sq="' + i + '" data-id="' + p.id + '" aria-pressed="' + gk + '"' + (on ? "" : " disabled") + '>TW</button>'
+          + '<button class="tw cap" data-act="cwsquadcaptain" data-sq="' + i + '" data-id="' + p.id + '" aria-pressed="' + cap + '"' + (on ? "" : " disabled") + '>C</button></div>';
       }).join("") + "</div>"
       : '<div class="card empty">Noch keine Spieler erfasst. <button class="btn btn-sm" data-act="go" data-view="admin" data-tab="players" style="margin-top:10px">Spieler anlegen</button></div>';
     h += '<div style="margin:20px 0;border-top:1px solid var(--line)"></div>';
@@ -1768,15 +1772,17 @@ function callupStep2(cw){
 
 function callupStep3(cw){
   var players = activePlayers();
-  var h = '<p class="small muted" style="margin:0 0 4px">Antippen wählt aus/ab &middot; <b>TW</b> markiert Torhüter für dieses Aufgebot (auch mehrere möglich).</p>'
+  var h = '<p class="small muted" style="margin:0 0 4px">Antippen wählt aus/ab &middot; <b>TW</b> markiert Torhüter für dieses Aufgebot (auch mehrere möglich) &middot; <b>C</b> markiert den Captain.</p>'
     + '<div class="eyebrow">Ausgewählt: ' + cw.playerIds.length + ' / 14</div>';
   h += players.length ? '<div class="card">' + players.map(function(p){
       var on = cw.playerIds.indexOf(p.id) >= 0;
       var gk = isKeeper(cw, p.id);
+      var cap = cw.captainId === p.id;
       return '<div class="item cwitem' + (on ? " sel" : "") + '">'
         + '<button class="grow" data-act="cwplayer" data-id="' + p.id + '" aria-pressed="' + on + '" style="text-align:left;background:none;border:0;padding:0;font:inherit;color:inherit;cursor:pointer">'
         + (on ? ICON.check : "") + "<b>" + esc(p.first) + "</b> " + esc(p.last) + "</button>"
-        + '<button class="tw" data-act="cwgk" data-id="' + p.id + '" aria-pressed="' + gk + '"' + (on ? "" : " disabled") + '>TW</button></div>';
+        + '<button class="tw" data-act="cwgk" data-id="' + p.id + '" aria-pressed="' + gk + '"' + (on ? "" : " disabled") + '>TW</button>'
+        + '<button class="tw cap" data-act="cwcaptain" data-id="' + p.id + '" aria-pressed="' + cap + '"' + (on ? "" : " disabled") + '>C</button></div>';
     }).join("") + "</div>"
     : '<div class="card empty">Noch keine Spieler erfasst. <button class="btn btn-sm" data-act="go" data-view="admin" data-tab="players" style="margin-top:10px">Spieler anlegen</button></div>';
 
@@ -1834,7 +1840,7 @@ function viewCallupPrint(){
     cu.squads.forEach(function(sq, i){
       var names = sq.playerIds.map(function(pid){
         var p = byId(DB.players, pid); if (!p) return null;
-        return fullName(p) + (isKeeper(sq, pid) ? " (TW)" : "");
+        return fullName(p) + (isKeeper(sq, pid) ? " (TW)" : "") + (sq.captainId === pid ? " (Captain)" : "");
       }).filter(Boolean);
       if (i === 0) cu.guests.forEach(function(g){ names.push(g.name + (g.team ? " (" + g.team + ")" : "")); });
       h += '<div class="ca-lbl" style="margin-bottom:6px">' + esc(teamName) + " " + esc(sq.name || "Team " + (i + 1)) + ":</div>"
@@ -1843,7 +1849,7 @@ function viewCallupPrint(){
   } else {
     var names = cu.playerIds.map(function(pid){
       var p = byId(DB.players, pid); if (!p) return null;
-      return fullName(p) + (isKeeper(cu, pid) ? " (TW)" : "");
+      return fullName(p) + (isKeeper(cu, pid) ? " (TW)" : "") + (cu.captainId === pid ? " (Captain)" : "");
     }).filter(Boolean);
     cu.guests.forEach(function(g){ names.push(g.name + (g.team ? " (" + g.team + ")" : "")); });
     h += '<div class="ca-lbl" style="margin-bottom:6px">Aufgebot für:</div><ol>' + names.map(function(n){ return "<li>" + esc(n) + "</li>"; }).join("") + "</ol>";
@@ -2691,7 +2697,7 @@ var ACT = {
     var cw = UI.callup; if (!cw || !cw.squads) return;
     captureSquads();
     if (cw.squads.length >= 2) return;
-    cw.squads.push({name: "Team " + String.fromCharCode(65 + cw.squads.length), coachIds: [], playerIds: [], keeperIds: []});
+    cw.squads.push({name: "Team " + String.fromCharCode(65 + cw.squads.length), coachIds: [], playerIds: [], keeperIds: [], captainId: ""});
     UI.scroll = window.scrollY;
     render();
   },
@@ -2731,6 +2737,7 @@ var ACT = {
     if (on) {
       sq.playerIds = sq.playerIds.filter(function(x){ return x !== id; });
       sq.keeperIds = sq.keeperIds.filter(function(x){ return x !== id; });
+      if (sq.captainId === id) sq.captainId = "";
     } else {
       sq.playerIds.push(id);
     }
@@ -2745,6 +2752,16 @@ var ACT = {
     if (sq.playerIds.indexOf(id) < 0) return;
     var idx = sq.keeperIds.indexOf(id);
     if (idx >= 0) sq.keeperIds.splice(idx, 1); else sq.keeperIds.push(id);
+    UI.scroll = window.scrollY;
+    render();
+  },
+  cwsquadcaptain: function(t){
+    var cw = UI.callup; if (!cw || !cw.squads) return;
+    captureSquads();
+    var sq = cw.squads[Number(t.getAttribute("data-sq"))]; if (!sq) return;
+    var id = t.getAttribute("data-id");
+    if (sq.playerIds.indexOf(id) < 0) return;
+    sq.captainId = (sq.captainId === id) ? "" : id;
     UI.scroll = window.scrollY;
     render();
   },
@@ -2769,6 +2786,7 @@ var ACT = {
     if (on) {
       cw.playerIds = cw.playerIds.filter(function(x){ return x !== id; });
       cw.keeperIds = cw.keeperIds.filter(function(x){ return x !== id; });
+      if (cw.captainId === id) cw.captainId = "";
     } else {
       if (cw.playerIds.length >= 14) { toast("Maximal 14 Spieler möglich."); return; }
       cw.playerIds.push(id);
@@ -2782,6 +2800,14 @@ var ACT = {
     if (cw.playerIds.indexOf(id) < 0) return;
     var idx = cw.keeperIds.indexOf(id);
     if (idx >= 0) cw.keeperIds.splice(idx, 1); else cw.keeperIds.push(id);
+    UI.scroll = window.scrollY;
+    render();
+  },
+  cwcaptain: function(t){
+    var cw = UI.callup; if (!cw) return;
+    var id = t.getAttribute("data-id");
+    if (cw.playerIds.indexOf(id) < 0) return;
+    cw.captainId = (cw.captainId === id) ? "" : id;
     UI.scroll = window.scrollY;
     render();
   },
@@ -2819,12 +2845,12 @@ var ACT = {
     var payload = isT ? {
       opponent: cw.opponent, venueAddress: cw.venueAddress, travelMinutes: cw.travelMinutes,
       meetPlace: cw.meetPlace, meetTime: cw.meetTime, rows: rows,
-      squads: cw.squads.map(function(sq){ return {name: sq.name, coachIds: sq.coachIds.slice(), playerIds: sq.playerIds.slice(), keeperIds: sq.keeperIds.slice()}; }),
+      squads: cw.squads.map(function(sq){ return {name: sq.name, coachIds: sq.coachIds.slice(), playerIds: sq.playerIds.slice(), keeperIds: sq.keeperIds.slice(), captainId: sq.captainId}; }),
       guests: cw.guests.map(function(g){ return {name: g.name, team: g.team}; })
     } : {
       opponent: cw.opponent, homeAway: cw.homeAway, venueAddress: cw.venueAddress,
       travelMinutes: cw.travelMinutes, meetPlace: cw.meetPlace, meetTime: cw.meetTime, rows: rows,
-      coachIds: cw.coachIds.slice(), playerIds: cw.playerIds.slice(), keeperIds: cw.keeperIds.slice(),
+      coachIds: cw.coachIds.slice(), playerIds: cw.playerIds.slice(), keeperIds: cw.keeperIds.slice(), captainId: cw.captainId,
       guests: cw.guests.map(function(g){ return {name: g.name, team: g.team}; })
     };
     commit(function(db){
@@ -2844,9 +2870,9 @@ var ACT = {
       var fields = isT
         ? {meetPlace: payload.meetPlace, meetTime: payload.meetTime, travelMinutes: payload.travelMinutes, rows: payload.rows, squads: payload.squads, guests: payload.guests}
         : {meetPlace: payload.meetPlace, meetTime: payload.meetTime, travelMinutes: payload.travelMinutes, rows: payload.rows,
-           coachIds: payload.coachIds, playerIds: payload.playerIds, keeperIds: payload.keeperIds, guests: payload.guests};
+           coachIds: payload.coachIds, playerIds: payload.playerIds, keeperIds: payload.keeperIds, captainId: payload.captainId, guests: payload.guests};
       if (existing) {
-        delete existing.squads; delete existing.coachIds; delete existing.playerIds; delete existing.keeperId; delete existing.keeperIds;
+        delete existing.squads; delete existing.coachIds; delete existing.playerIds; delete existing.keeperId; delete existing.keeperIds; delete existing.captainId;
         for (var k in fields) existing[k] = fields[k];
       } else {
         fields.id = uid("cu"); fields.matchId = matchId;

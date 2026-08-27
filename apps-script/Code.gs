@@ -433,7 +433,7 @@ function renderSheets(state) {
           var sqKeepers = sq.keeperIds || (sq.keeperId ? [sq.keeperId] : []);
           (sq.playerIds || []).forEach(function (pid) {
             var p = playersById[pid]; if (!p) return;
-            names.push(nameOf(p) + (sqKeepers.indexOf(pid) >= 0 ? ' (TW)' : '') + ' [' + (sq.name || '') + ']');
+            names.push(nameOf(p) + (sqKeepers.indexOf(pid) >= 0 ? ' (TW)' : '') + (sq.captainId === pid ? ' (Captain)' : '') + ' [' + (sq.name || '') + ']');
           });
         });
         coachN = (cu.squads || []).map(function (sq) {
@@ -444,7 +444,7 @@ function renderSheets(state) {
         var cuKeepers = cu.keeperIds || (cu.keeperId ? [cu.keeperId] : []);
         names = (cu.playerIds || []).map(function (pid) {
           var p = playersById[pid]; if (!p) return null;
-          return nameOf(p) + (cuKeepers.indexOf(pid) >= 0 ? ' (TW)' : '');
+          return nameOf(p) + (cuKeepers.indexOf(pid) >= 0 ? ' (TW)' : '') + (cu.captainId === pid ? ' (Captain)' : '');
         }).filter(Boolean);
         coachN = (cu.coachIds || []).map(function (cid) { var c = coachesById[cid]; return c ? nameOf(c) : null; }).filter(Boolean).join(', ');
       }
