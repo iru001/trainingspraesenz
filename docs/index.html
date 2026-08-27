@@ -390,6 +390,12 @@ table.grid td.num{text-align:right;font-variant-numeric:tabular-nums}
 
 /* ---------- PIN-Sperre ---------- */
 .lock{min-height:100dvh;display:flex;align-items:center;justify-content:center;padding:24px 16px;background:var(--bg)}
+/* Der Admin-PIN-Sperrbildschirm erscheint - anders als der App-PIN-Bildschirm -
+   NICHT anstelle des gesamten #root, sondern innerhalb von <main class="app">,
+   also zwischen Kopfzeile und unterer Navigation. 100dvh waere dort zu hoch
+   (zaehlt Kopfzeile+Navigation quasi doppelt) und schiebt die Karte sichtbar
+   nach unten aus der Mitte. */
+.lock-nested{min-height:calc(100dvh - 180px)}
 .lock-card{width:min(340px,100%);display:flex;flex-direction:column;align-items:center;gap:18px;text-align:center}
 .lock-mark{
   width:56px;height:56px;border-radius:18px;background:var(--accent);color:var(--on-accent);
@@ -427,7 +433,14 @@ table.grid td.num{text-align:right;font-variant-numeric:tabular-nums}
     --info:#22506f; --info-soft:#e5edf4; --shadow:none;
   }
   .topbar,.nav,.noprint,.toast{display:none !important}
-  .app{padding:0 !important;max-width:none}
+  /* Feste, geraetunabhaengige Breite statt max-width:none: sonst reflowt der
+     Text beim Drucken vom Computer aus ueber die volle (oft sehr breite)
+     Browserfenster-Breite - wenige, sehr breite Zeilen quetschen den
+     gesamten Inhalt ins obere Seitendrittel. Auf dem Handy faellt das nicht
+     auf, da der schmale Bildschirm ohnehin schon so schmal ist. Ein fester
+     mm-Wert sorgt dafuer, dass Ausdrucke vom Computer und vom Handy exakt
+     gleich umbrechen. */
+  .app{padding:0 !important;max-width:180mm;margin:0 auto}
   body{background:#fff}
   .card{box-shadow:none;break-inside:avoid}
   .eyebrow{margin-top:14px}
@@ -435,7 +448,7 @@ table.grid td.num{text-align:right;font-variant-numeric:tabular-nums}
   table.grid th,table.grid td{padding:3px 5px;border-bottom:1px solid #ccc}
   .tblwrap{overflow:visible}
   h2{break-after:avoid}
-  @page{margin:12mm 10mm}
+  @page{margin:38pt 40pt}
 }
 </style>
 </head>
@@ -1518,6 +1531,7 @@ function adminPlan(){
     }).join("") + "</div>"
     : '<div class="card empty">Noch keine Einzeltermine.</div>';
 
+  var isTournamentTeam = DB.settings.callupMode === "tournament";
   h += '<div class="card" style="padding:13px;margin-top:12px"><div class="formgrid">'
     + field("s-type", "Art", '<select id="s-type" onchange="document.getElementById(\'s-matchfields\').style.display = this.value===\'match\' ? \'\' : \'none\'"><option value="match">Wettkampf</option><option value="training">Training</option></select>')
     + field("s-date", "Datum", '<input type="date" id="s-date" value="' + todayISO() + '">')
@@ -1526,10 +1540,11 @@ function adminPlan(){
     + '</div><div class="formgrid" style="margin-top:10px">'
     + field("s-label", "Bezeichnung (optional)", '<input type="text" id="s-label" placeholder="z. B. Meisterschaftsspiel gegen FC Muster">')
     + '</div><div class="formgrid" id="s-matchfields" style="margin-top:10px">'
-    + field("s-opp", "Gegner (für Aufgebot)", '<input type="text" id="s-opp" placeholder="z. B. FC Muster c">')
-    + field("s-ha", "Heim / Auswärts", '<select id="s-ha"><option value="away">Auswärts</option><option value="home">Heim</option></select>')
+    + field("s-opp", isTournamentTeam ? "Turnier-Bezeichnung (für Aufgebot)" : "Gegner (für Aufgebot)",
+        '<input type="text" id="s-opp" placeholder="' + (isTournamentTeam ? "z. B. PMF Turnier in Seuzach" : "z. B. FC Muster c") + '">')
+    + (isTournamentTeam ? "" : field("s-ha", "Heim / Auswärts", '<select id="s-ha"><option value="away">Auswärts</option><option value="home">Heim</option></select>'))
     + field("s-addr", "Sportplatz-Adresse", '<input type="text" id="s-addr" placeholder="z. B. Sportanlage Buhwil, Effretikon">')
-    + '</div><p class="small muted" style="margin:6px 0 0">Gegner, Heim/Auswärts und Adresse lassen sich auch später beim Erstellen des Aufgebots ergänzen oder anpassen.</p>'
+    + '</div><p class="small muted" style="margin:6px 0 0">' + (isTournamentTeam ? "Turnier-Bezeichnung und Adresse lassen" : "Gegner, Heim/Auswärts und Adresse lassen") + ' sich auch später beim Erstellen des Aufgebots ergänzen oder anpassen.</p>'
     + '<button class="btn btn-primary btn-block" style="margin-top:10px" data-act="addsingle">Einzeltermin hinzufügen</button></div>';
   return h;
 }
@@ -1549,7 +1564,7 @@ function adminCallups(){
       } else if (cu) {
         status = "Aufgebot erstellt · " + cu.playerIds.length + " Spieler, " + cu.coachIds.length + " Trainer";
       }
-      return '<button class="item" data-act="callupopen" data-id="' + m.id + '"><span class="grow"><b>' + fmtShort(m.date) + "</b> · " + esc(m.opponent || m.label || "Wettkampf") + ha
+      return '<button class="item" data-act="callupview" data-id="' + m.id + '"><span class="grow"><b>' + fmtShort(m.date) + "</b> · " + esc(m.opponent || m.label || "Wettkampf") + ha
         + '<br><span class="small muted">' + esc(status) + '</span></span><span class="ev-side">' + ICON.chev + "</span></button>";
     }).join("") + "</div>"
     : '<div class="card empty">Noch keine Wettkampftage hinterlegt. Zuerst unter «Termine» anlegen. <button class="btn btn-sm" data-act="atab" data-v="plan" style="margin-top:10px">Zu Termine</button></div>';
@@ -1627,9 +1642,9 @@ function callupStep1(cw){
           true, "cwfielddel", 'data-field="travel"')
       + "</div>";
   }
-  h += '<button class="btn btn-sm" style="margin-top:2px" data-act="cwrecalc">Treffpunkt &amp; -zeit neu vorschlagen</button>'
-    + '<p class="small muted" style="margin:8px 0 0">Vorschlag: 1 Stunde vor Anpfiff am Spielort'
+  h += '<p class="small muted" style="margin:8px 0 0">Vorschlag: 1 Stunde vor Anpfiff am Spielort'
     + (away ? " abzüglich Fahrzeit ab Bülach &ndash; Treffpunkt " + (isT ? "" : "bei Auswärtsspielen ") + "ist " + esc(awayMeetPlace()) + "." : ".")
+    + " Wird automatisch neu berechnet, sobald Heim/Auswärts oder die Fahrzeit geändert wird."
     + " Vorausgefüllte Felder antippen zum Bearbeiten (Stift) oder Löschen (Mülltonne).</p></div>";
 
   var m = byId(DB.singles, cw.matchId) || {};
@@ -1991,7 +2006,7 @@ function viewLock(kind){
       + (LOADING ? "Bitte warten …" : "Weiter") + "</button>"
     : "";
   var teamName = DB ? (DB.settings.team || TITLE) : (TEAM ? TEAM.name : TITLE);
-  return '<div class="lock" id="lock"><div class="lock-card">'
+  return '<div class="lock' + (kind === "admin" ? " lock-nested" : "") + '" id="lock"><div class="lock-card">'
     + '<div class="lock-mark">' + (kind === "admin" ? "A" : "⚽") + "</div>"
     + '<div class="lock-title">' + (kind === "admin" ? "Admin-Bereich" : esc(teamName)) + "</div>"
     + '<p class="lock-sub">' + (kind === "admin" ? "Admin-PIN eingeben" : (LOADING ? "Daten werden geladen …" : "PIN eingeben, dann «Weiter»")) + "</p>"
@@ -2182,6 +2197,14 @@ document.addEventListener("input", function(ev){
     UI.state.note = t.value;
     saveDraft(UI.occ, UI.state);
   }
+});
+// Treffpunkt/-zeit im Aufgebot-Wizard automatisch neu vorschlagen, sobald sich
+// Heim/Auswaerts oder die Fahrzeit aendern - "change" statt "input", damit
+// waehrend des Tippens in der Fahrzeit kein Neu-Rendern den Fokus/die
+// Cursor-Position im Feld verliert (feuert erst beim Verlassen des Felds).
+document.addEventListener("change", function(ev){
+  var id = ev.target.id;
+  if ((id === "cw-ha" || id === "cw-travel") && UI.callup) ACT.cwrecalc();
 });
 document.addEventListener("keydown", function(ev){
   if (ev.key === "Enter" && el("reasonDlg") && el("reasonDlg").open) {
@@ -2513,6 +2536,22 @@ var ACT = {
     var id = t.getAttribute("data-id");
     UI.callup = newCallupState(id);
     go("callup");
+  },
+  // Fuer den Eintrag in der Aufgebote-Liste: bei bereits erstelltem Aufgebot
+  // direkt die fertige Druckansicht zeigen (mit "Bearbeiten"-Button dort,
+  // der ueber ACT.callupopen in den Wizard fuehrt) statt jedes Mal den ganzen
+  // Wizard von Schritt 1 an durchklicken zu muessen, nur um eine Vorschau zu
+  // sehen.
+  callupview: function(t){
+    var id = t.getAttribute("data-id");
+    if (callupForMatch(id)) {
+      UI.callupPrintId = id;
+      UI.callup = null;
+      go("callupprint");
+    } else {
+      UI.callup = newCallupState(id);
+      go("callup");
+    }
   },
   cwrecalc: function(){
     var cw = UI.callup; if (!cw) return;
