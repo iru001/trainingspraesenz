@@ -206,17 +206,24 @@ button.item:first-child{border-top:0}
 .guestchip{display:inline-flex;align-items:center;gap:6px;background:var(--surface-2);border:1px solid var(--line-2);border-radius:999px;padding:5px 6px 5px 12px;font-size:13px;margin:0 6px 6px 0}
 .guestchip button{border:0;background:var(--surface-3);color:var(--ink-2);width:24px;height:24px;border-radius:50%;font-size:15px;line-height:1;cursor:pointer}
 
-/* ---------- Aufgebot: Druckansicht ---------- */
-.capaper{background:#fff;color:#1a1a1a;border-radius:var(--r);box-shadow:var(--shadow);padding:26px 24px;font-size:13.5px;line-height:1.6}
-.capaper .ca-head{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;margin-bottom:16px}
-.capaper h2{font-family:"Source Sans 3",sans-serif;font-size:16px;font-weight:700;margin:0 0 8px}
+/* ---------- Aufgebot: Druckansicht ----------
+   Die Abstaende sind ueber CSS-Variablen definiert (--ca-*), damit
+   fitCapaperOnePage() (siehe ACT.print) vor dem Drucken per Klassenwechsel
+   (.ca-compact / .ca-tight) auf eine kompaktere Stufe umschalten kann, falls
+   der Inhalt sonst nicht auf eine einzelne DIN-A4-Seite passen wuerde. */
+.capaper{--ca-fs:13.5px;--ca-lh:1.6;--ca-h2-fs:19.2px;--ca-head-mb:16px;--ca-list-margin:8px 0 20px;--ca-li-mb:4px;--ca-tbl-mb:14px;--ca-td-pad:9px 14px 9px 0;
+  background:#fff;color:#1a1a1a;border-radius:var(--r);box-shadow:var(--shadow);padding:26px 24px;font-size:var(--ca-fs);line-height:var(--ca-lh)}
+.capaper.ca-compact{--ca-fs:12px;--ca-lh:1.35;--ca-h2-fs:16.5px;--ca-head-mb:10px;--ca-list-margin:5px 0 12px;--ca-li-mb:2px;--ca-tbl-mb:8px;--ca-td-pad:5px 10px 5px 0}
+.capaper.ca-tight{--ca-fs:10.5px;--ca-lh:1.15;--ca-h2-fs:14px;--ca-head-mb:6px;--ca-list-margin:3px 0 7px;--ca-li-mb:1px;--ca-tbl-mb:5px;--ca-td-pad:3px 8px 3px 0}
+.capaper .ca-head{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;margin-bottom:var(--ca-head-mb)}
+.capaper h2{font-family:"Source Sans 3",sans-serif;font-size:var(--ca-h2-fs);font-weight:700;margin:0 0 8px}
 .capaper .ca-logo{width:175px;flex:none}
 .capaper .ca-logo img{width:100%;display:block}
 .capaper .ca-lbl{font-weight:700}
-.capaper ol,.capaper ul{margin:8px 0 20px;padding-left:24px}
-.capaper ol li,.capaper ul li{margin-bottom:4px}
-.capaper table{border-collapse:separate;border-spacing:0;width:100%;margin-bottom:14px}
-.capaper table td{padding:9px 14px 9px 0;vertical-align:top;border-bottom:1px solid #e5e5e5}
+.capaper ol,.capaper ul{margin:var(--ca-list-margin);padding-left:24px}
+.capaper ol li,.capaper ul li{margin-bottom:var(--ca-li-mb)}
+.capaper table{border-collapse:separate;border-spacing:0;width:100%;margin-bottom:var(--ca-tbl-mb)}
+.capaper table td{padding:var(--ca-td-pad);vertical-align:top;border-bottom:1px solid #e5e5e5}
 .capaper table tr:last-child td{border-bottom:0}
 .capaper table td:first-child{font-weight:700;width:34%;white-space:nowrap;padding-left:0}
 .capaper .ca-foot{font-size:12px;color:#333;margin-top:8px}
@@ -2327,6 +2334,30 @@ function updateSheet(){
   saveDraft(UI.occ, st);
 }
 
+/* Aufgebot-PDF: muss immer auf eine einzelne DIN-A4-Seite passen. Statt den
+   Inhalt per CSS-Transform zu skalieren (Skalierung wird von Druck-Engines
+   bei der Seitenumbruch-Berechnung uneinheitlich behandelt, siehe die
+   @page-Problematik weiter oben), wird vor dem Drucken die tatsaechliche
+   Ausdruckhoehe simuliert (gleiche Breite/Innenabstand wie @media print) und
+   bei Bedarf auf eine kompaktere CSS-Stufe (kleinere Schrift/Abstaende statt
+   abgeschnittenem Inhalt) umgeschaltet. */
+function fitCapaperOnePage(paper){
+  paper.classList.remove("ca-compact", "ca-tight");
+  var app = document.querySelector(".app");
+  var prevAppCss = app ? app.style.cssText : "";
+  var prevPaperPadding = paper.style.padding;
+  if (app) { app.style.width = "calc(210mm - 80pt)"; app.style.maxWidth = "calc(210mm - 80pt)"; app.style.padding = "38pt 0"; }
+  paper.style.padding = "0";
+  var PAGE_H_PT = 841.89, PAD_Y_PT = 38, PX_PER_PT = 96 / 72;
+  var budgetPx = (PAGE_H_PT - 2 * PAD_Y_PT) * PX_PER_PT;
+  if (paper.scrollHeight > budgetPx) {
+    paper.classList.add("ca-compact");
+    if (paper.scrollHeight > budgetPx) { paper.classList.remove("ca-compact"); paper.classList.add("ca-tight"); }
+  }
+  paper.style.padding = prevPaperPadding;
+  if (app) app.style.cssText = prevAppCss;
+}
+
 var ACT = {
   go: function(t){
     var v = t.getAttribute("data-view");
@@ -2347,7 +2378,11 @@ var ACT = {
     go(UI.view === "report" ? "stats" : UI.view === "plandetail" ? "planning" : "events");
   },
   report: function(){ go("report"); },
-  print: function(){ try { window.print(); } catch(e){ toast("Der Browser hat das Drucken blockiert – bitte über das Browsermenü drucken."); } },
+  print: function(){
+    var paper = document.querySelector(".capaper");
+    if (paper) fitCapaperOnePage(paper);
+    try { window.print(); } catch(e){ toast("Der Browser hat das Drucken blockiert – bitte über das Browsermenü drucken."); }
+  },
   pin: function(t){ addDigit(t.getAttribute("data-d")); },
   pinok: function(){ submitPin(UNLOCKED ? "admin" : "app"); },
   pindel: function(){ PINBUF = PINBUF.slice(0, -1); render(); },

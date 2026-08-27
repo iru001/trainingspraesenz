@@ -500,6 +500,28 @@ Freitext raten; die muss einmalig in "Termine" nachgetragen werden.
   Das Logo (`.capaper .ca-logo{width:175px}`) ist bewusst 75 % größer als
   ursprünglich (100px) – beide Teams nutzen dasselbe eingebettete Vereins-
   logo (`TEAM.logo` in `docs/config.js`), ident für D9b und FA 2018.
+- **Titel-Schriftgröße**: `.capaper h2` ist 19.2px (vorher 16px, +20 %).
+- **Ausdruck passt garantiert auf eine einzelne DIN-A4-Seite**
+  (`fitCapaperOnePage()`, aufgerufen aus `ACT.print` vor `window.print()`,
+  nur wenn `.capaper` existiert – der Bericht/`.report` ist davon nicht
+  betroffen): die Abstände/Schriftgrößen von `.capaper` liegen als
+  CSS-Variablen vor (`--ca-fs`, `--ca-lh`, `--ca-h2-fs`, `--ca-head-mb`,
+  `--ca-list-margin`, `--ca-li-mb`, `--ca-tbl-mb`, `--ca-td-pad`) und werden
+  über zwei kompaktere Stufen (`.ca-compact`, `.ca-tight`) überschrieben.
+  `fitCapaperOnePage()` simuliert kurz die Druckbreite/-Innenabstand aus dem
+  `@media print`-Block (`.app` bekommt vorübergehend
+  `width:calc(210mm - 80pt)` und `padding:38pt 0`, `.capaper` `padding:0`),
+  misst `scrollHeight` gegen das verfügbare Platzbudget
+  (`(841.89pt Seitenhöhe − 2×38pt Innenabstand) × 96/72`) und schaltet bei
+  Bedarf auf `.ca-compact`, danach nötigenfalls auf `.ca-tight`, bevor die
+  temporären Stiländerungen an `.app`/`.capaper` wieder rückgängig gemacht
+  werden. Bewusst KEIN `transform:scale()` – Druck-Engines behandeln
+  Seitenumbrüche bei skalierten Elementen uneinheitlich (dieselbe
+  Unzuverlässigkeit wie bei `@page{margin:...}`, siehe oben); echte
+  Box-Layout-Werte (Schriftgröße/Zeilenhöhe/Abstände) werden dagegen von
+  jedem Drucktreiber gleich behandelt. `.ca-tight` ist die unterste Stufe –
+  bei absurd langem Inhalt (z. B. sehr lange freie Notizen) wird nicht
+  darunter verkleinert, um die Lesbarkeit nicht zu gefährden.
 
 ---
 
