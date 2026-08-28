@@ -939,6 +939,12 @@ function newCallupState(matchId){
   var ex = callupForMatch(matchId);
   var addr = m.venueAddress || "";
   var v = venueFor(addr);
+  // Vorschlagswerte, die beim Erstellen berechnet bzw. aus den Team-
+  // Einstellungen uebernommen werden, aber pro Aufgebot ueberschreibbar sind
+  // (wie Besammlungszeit/-ort) - ex.duration/ex.mitnehmen gewinnen, falls
+  // schon einmal individuell angepasst und gespeichert.
+  var duration = ex && ex.duration ? ex.duration : (timeRange(m) || "");
+  var mitnehmen = ex && ex.mitnehmen ? ex.mitnehmen : (DB.settings.callupNotes || CALLUP_NOTES_DEFAULT);
   if (mode === "tournament") {
     var ttravel = ex ? (ex.travelMinutes || 0) : (v ? v.travelMinutes : 0);
     var tmeetPlace = ex ? ex.meetPlace : awayMeetPlace();
@@ -957,6 +963,7 @@ function newCallupState(matchId){
       // nicht als "Gegner" eignet (siehe adminPlan()).
       opponent: m.opponent || m.label || "",
       venueAddress: addr, travelMinutes: ttravel, meetPlace: tmeetPlace, meetTime: tmeetTime,
+      duration: duration, mitnehmen: mitnehmen,
       squads: squads,
       guests: ex ? ex.guests.map(function(g){ return {name: g.name, team: g.team}; }) : [],
       rows: (ex && ex.rows && ex.rows.length) ? cloneInfoRows(ex.rows) : defaultInfoRows(),
@@ -980,6 +987,7 @@ function newCallupState(matchId){
     travelMinutes: travel,
     meetPlace: meetPlace,
     meetTime: meetTime,
+    duration: duration, mitnehmen: mitnehmen,
     // ex koennte von einer frueheren Speicherung unter callupMode "tournament"
     // stammen (squads statt coachIds/playerIds) - z. B. wenn die Team-Einstellung
     // "Art der Wettkampftage" nachtraeglich geaendert wurde. In dem Fall wie bei
@@ -1001,6 +1009,8 @@ function captureCallupStep1(){
   if (el("cw-travel")) cw.travelMinutes = Number(val("cw-travel")) || 0;
   if (el("cw-meetplace")) cw.meetPlace = val("cw-meetplace");
   if (el("cw-meettime")) cw.meetTime = val("cw-meettime");
+  if (el("cw-duration")) cw.duration = val("cw-duration");
+  if (el("cw-mitnehmen")) cw.mitnehmen = val("cw-mitnehmen");
 }
 function captureSquads(){
   var cw = UI.callup; if (!cw || !cw.squads) return;
@@ -1422,11 +1432,17 @@ function lockedField(cw, key, label, value, inputHtml, deletable, delAct, delExt
 // Wert (siehe lockedField); "auto"/"team"-Zeilen sind reine Anzeige (berechnet
 // bzw. aus den Team-Einstellungen); "custom"-Zeilen sind frei benannter Freitext.
 var DEFAULT_INFO_ROWS = ["notcalled", "wann", "meettime", "meetplace", "duration", "addr", "mitnehmen"];
-var INFO_ROW_KIND = {notcalled: "auto", wann: "auto", meettime: "field", meetplace: "field", duration: "auto", addr: "field", mitnehmen: "team"};
+var INFO_ROW_KIND = {notcalled: "auto", wann: "auto", meettime: "field", meetplace: "field", duration: "field", addr: "field", mitnehmen: "field"};
 function defaultInfoRows(){ return DEFAULT_INFO_ROWS.map(function(k){ return {key: k, kind: INFO_ROW_KIND[k]}; }); }
 function cloneInfoRows(rows){
+  // Fuer eingebaute Felder (alles ausser "custom") entscheidet IMMER die
+  // aktuelle INFO_ROW_KIND-Definition ueber die Art der Zeile, nicht ein evtl.
+  // aelterer, mitgespeicherter Wert - sonst wuerden z. B. "duration"/
+  // "mitnehmen" bei schon vorhandenen Aufgeboten dauerhaft auf ihrer alten,
+  // nicht editierbaren Art ("auto"/"team") haengen bleiben, obwohl der Code
+  // sie inzwischen editierbar macht.
   return rows.map(function(r){
-    return r.kind === "custom" ? {key: r.key, kind: "custom", label: r.label || "", value: r.value || ""} : {key: r.key, kind: r.kind || INFO_ROW_KIND[r.key] || "auto"};
+    return r.kind === "custom" ? {key: r.key, kind: "custom", label: r.label || "", value: r.value || ""} : {key: r.key, kind: INFO_ROW_KIND[r.key] || r.kind || "auto"};
   });
 }
 function infoRowLabel(key, isT){
@@ -1449,8 +1465,6 @@ function callupRowPreview(cw, m, key){
     return names.length ? names.join(", ") : "–";
   }
   if (key === "wann") return m.date ? fmtDate(m.date) : "–";
-  if (key === "duration") return timeRange(m) || "–";
-  if (key === "mitnehmen") return DB.settings.callupNotes || CALLUP_NOTES_DEFAULT;
   return "";
 }
 function renderInfoRows(cw, m){
@@ -1463,9 +1477,10 @@ function renderInfoRows(cw, m){
         + '<input type="text" class="customvalue" data-rowkey="' + esc(key) + '" value="' + esc(row.value) + '" placeholder="Wert" style="margin-top:6px">'
         + "</div>" + fieldConfirmRow("cwf-" + key, "cwrowdel", 'data-rowkey="' + esc(key) + '"');
     } else if (kind === "field") {
-      var val = key === "meettime" ? cw.meetTime : key === "meetplace" ? cw.meetPlace : cw.venueAddress;
-      var inputHtml = key === "meettime"
-        ? '<input type="time" id="cw-' + key + '" value="' + esc(val) + '">'
+      var val = key === "meettime" ? cw.meetTime : key === "meetplace" ? cw.meetPlace
+        : key === "duration" ? cw.duration : key === "mitnehmen" ? cw.mitnehmen : cw.venueAddress;
+      var inputHtml = key === "meettime" ? '<input type="time" id="cw-' + key + '" value="' + esc(val) + '">'
+        : key === "mitnehmen" ? '<textarea id="cw-' + key + '">' + esc(val) + "</textarea>"
         : '<input type="text" id="cw-' + key + '" value="' + esc(val) + '">';
       inner = lockedField(cw, key, label, val, inputHtml, true, "cwrowdel", 'data-rowkey="' + key + '"');
     } else {
@@ -1816,7 +1831,12 @@ function viewCallupPrint(){
 
   var addr = m.venueAddress || "";
   var mapsUrl = addr ? "https://maps.google.com/?q=" + encodeURIComponent(addr) : "";
-  var notes = DB.settings.callupNotes || CALLUP_NOTES_DEFAULT;
+  // cu.duration/cu.mitnehmen erst seit der editierbaren Version dieser Felder
+  // gespeichert - bei aelteren Aufgeboten (Feld war noch nicht gesetzt) auf
+  // den frueher fest berechneten/aus den Team-Einstellungen stammenden Wert
+  // zurueckfallen.
+  var duration = cu.duration || timeRange(m) || "";
+  var notes = cu.mitnehmen || DB.settings.callupNotes || CALLUP_NOTES_DEFAULT;
   var cancelHint = DB.settings.callupCancelHint || CALLUP_CANCEL_DEFAULT;
   var logo = (TEAM && TEAM.logo) ? '<div class="ca-logo"><img src="' + TEAM.logo + '" alt="' + esc(DB.settings.team || TITLE) + '"></div>' : "";
   var teamName = DB.settings.team || TITLE;
@@ -1863,7 +1883,7 @@ function viewCallupPrint(){
     if (key === "wann") return "<tr><td>Wann:</td><td><span class=\"ca-hi\">" + esc(fmtDate(m.date)) + "</span></td></tr>";
     if (key === "meettime") return "<tr><td>Besammlungszeit:</td><td>" + esc(cu.meetTime ? cu.meetTime + " Uhr" : "–") + "</td></tr>";
     if (key === "meetplace") return "<tr><td>Besammlungsort:</td><td>" + esc(cu.meetPlace || "–") + "</td></tr>";
-    if (key === "duration") return "<tr><td>" + (isT ? "Turnierzeit" : "Spieldauer") + ":</td><td>" + esc(timeRange(m) || "–") + "</td></tr>";
+    if (key === "duration") return "<tr><td>" + (isT ? "Turnierzeit" : "Spieldauer") + ":</td><td>" + esc(duration || "–") + "</td></tr>";
     if (key === "addr") return "<tr><td>Adresse Sportplatz:</td><td>" + (addr ? esc(addr) + (mapsUrl ? ' (<a class="maplink" href="' + esc(mapsUrl) + '" target="_blank" rel="noopener">Google Maps</a>)' : "") : "–") + "</td></tr>";
     if (key === "mitnehmen") return "<tr><td>Mitnehmen:</td><td>" + esc(notes) + "</td></tr>";
     return "";
@@ -2844,12 +2864,12 @@ var ACT = {
     var rows = cloneInfoRows(cw.rows);
     var payload = isT ? {
       opponent: cw.opponent, venueAddress: cw.venueAddress, travelMinutes: cw.travelMinutes,
-      meetPlace: cw.meetPlace, meetTime: cw.meetTime, rows: rows,
+      meetPlace: cw.meetPlace, meetTime: cw.meetTime, duration: cw.duration, mitnehmen: cw.mitnehmen, rows: rows,
       squads: cw.squads.map(function(sq){ return {name: sq.name, coachIds: sq.coachIds.slice(), playerIds: sq.playerIds.slice(), keeperIds: sq.keeperIds.slice(), captainId: sq.captainId}; }),
       guests: cw.guests.map(function(g){ return {name: g.name, team: g.team}; })
     } : {
       opponent: cw.opponent, homeAway: cw.homeAway, venueAddress: cw.venueAddress,
-      travelMinutes: cw.travelMinutes, meetPlace: cw.meetPlace, meetTime: cw.meetTime, rows: rows,
+      travelMinutes: cw.travelMinutes, meetPlace: cw.meetPlace, meetTime: cw.meetTime, duration: cw.duration, mitnehmen: cw.mitnehmen, rows: rows,
       coachIds: cw.coachIds.slice(), playerIds: cw.playerIds.slice(), keeperIds: cw.keeperIds.slice(), captainId: cw.captainId,
       guests: cw.guests.map(function(g){ return {name: g.name, team: g.team}; })
     };
@@ -2868,8 +2888,8 @@ var ACT = {
       }
       var existing = db.callups.filter(function(c){ return c.matchId === matchId; })[0];
       var fields = isT
-        ? {meetPlace: payload.meetPlace, meetTime: payload.meetTime, travelMinutes: payload.travelMinutes, rows: payload.rows, squads: payload.squads, guests: payload.guests}
-        : {meetPlace: payload.meetPlace, meetTime: payload.meetTime, travelMinutes: payload.travelMinutes, rows: payload.rows,
+        ? {meetPlace: payload.meetPlace, meetTime: payload.meetTime, travelMinutes: payload.travelMinutes, duration: payload.duration, mitnehmen: payload.mitnehmen, rows: payload.rows, squads: payload.squads, guests: payload.guests}
+        : {meetPlace: payload.meetPlace, meetTime: payload.meetTime, travelMinutes: payload.travelMinutes, duration: payload.duration, mitnehmen: payload.mitnehmen, rows: payload.rows,
            coachIds: payload.coachIds, playerIds: payload.playerIds, keeperIds: payload.keeperIds, captainId: payload.captainId, guests: payload.guests};
       if (existing) {
         delete existing.squads; delete existing.coachIds; delete existing.playerIds; delete existing.keeperId; delete existing.keeperIds; delete existing.captainId;

@@ -454,20 +454,38 @@ Freitext raten; die muss einmalig in "Termine" nachgetragen werden.
   (`cw.rows`/`cu.rows`, Schritt 1): eine Liste aus `{key, kind}` für die
   eingebauten Zeilen (`notcalled`/`wann`/`meettime`/`meetplace`/
   `duration`/`addr`/`mitnehmen`, `INFO_ROW_KIND` legt die Art fest –
-  `"field"` hat einen echten Wert und nutzt `lockedField()`, `"auto"`/
-  `"team"` sind reine Anzeige) plus frei benannte `{key, kind:"custom",
-  label, value}`-Zeilen (`ACT.cwaddrow`). Reihenfolge im Wizard = Reihenfolge
-  im Ausdruck: `viewCallupPrint()` iteriert dieselbe `cu.rows`-Liste statt
-  fest codierter Tabellenzeilen; fehlt `rows` (ältere, vor dieser Funktion
-  gespeicherte Aufgebote), greift `defaultInfoRows()` als Fallback. Löschen
-  einer Zeile (`ACT.cwrowdel`) entfernt sie nur aus der Liste – bei
-  `"field"`-Zeilen bleibt der zugrunde liegende Wert (z. B. `venueAddress`
-  für die Fahrzeit-Berechnung) unangetastet, auch wenn die Zeile selbst
-  nicht mehr gedruckt wird. Da dadurch kein Wert verloren geht, zeigt
+  `"field"` hat einen echten, editierbaren Wert und nutzt `lockedField()`,
+  `"auto"` ist reine, nicht editierbare Anzeige – aktuell nur noch
+  `notcalled`/`wann`, die sich rein aus anderen Daten ableiten und für die
+  ein eigener Wert keinen Sinn ergäbe) plus frei benannte `{key,
+  kind:"custom", label, value}`-Zeilen (`ACT.cwaddrow`). `cloneInfoRows()`
+  bestimmt die Art eingebauter Zeilen IMMER frisch aus dem aktuellen
+  `INFO_ROW_KIND` (nicht aus einem evtl. älter gespeicherten `kind`) – macht
+  eine Änderung wie `duration`/`mitnehmen` von `"auto"`/`"team"` auf
+  `"field"` rückwirkend auch für schon gespeicherte Aufgebote wirksam, ohne
+  Datenmigration. Reihenfolge im Wizard = Reihenfolge im Ausdruck:
+  `viewCallupPrint()` iteriert dieselbe `cu.rows`-Liste statt fest codierter
+  Tabellenzeilen; fehlt `rows` (ältere, vor dieser Funktion gespeicherte
+  Aufgebote), greift `defaultInfoRows()` als Fallback. Löschen einer Zeile
+  (`ACT.cwrowdel`) entfernt sie nur aus der Liste – bei `"field"`-Zeilen
+  bleibt der zugrunde liegende Wert (z. B. `venueAddress` für die
+  Fahrzeit-Berechnung) unangetastet, auch wenn die Zeile selbst nicht mehr
+  gedruckt wird. Da dadurch kein Wert verloren geht, zeigt
   `renderInfoRows()` unterhalb der Liste für jedes fehlende eingebaute Feld
   einen "+ … wiederherstellen"-Button (`ACT.cwrestorerow`) – kein
   Sicherheitsabfrage-Rückgängig nötig, da versehentliches Löschen risikolos
   ist.
+  **`duration`/`mitnehmen` als editierbare Vorschlagsfelder**: wie
+  `meettime`/`meetplace` ein Vorschlag mit Stift-Symbol statt reiner
+  Berechnung. `newCallupState()` berechnet den Vorschlag einmalig
+  (`timeRange(m)` bzw. `DB.settings.callupNotes || CALLUP_NOTES_DEFAULT`)
+  und übernimmt einen schon individuell gespeicherten Wert
+  (`ex.duration`/`ex.mitnehmen`), falls vorhanden – analog zur Fahrzeit.
+  `viewCallupPrint()` zeigt `cu.duration`/`cu.mitnehmen`, fällt bei älteren
+  Aufgeboten ohne dieses Feld auf den früher fest berechneten Wert zurück.
+  Betrifft nur den Ausdruck/das Aufgebot selbst – das Apps-Script-Backend
+  rendert diese beiden Felder nicht in der Aufgebote-Übersicht im Sheet,
+  daher hier ausnahmsweise KEIN Redeploy nötig.
 - **Reihenfolge per Ziehen** (`rowDragStart/-Move/-End`, `ROWDRAG`):
   bewusst kein HTML5-Drag&Drop (auf iOS/Touch unzuverlässig), sondern
   Pointer Events auf dem Griff-Icon (`data-drag-handle`, delegiert via
