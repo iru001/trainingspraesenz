@@ -90,19 +90,25 @@ statt die Arbeit des anderen zu überschreiben.
   - **Einzelspiel**: ein Gegner, Heim/Auswärts, Trainer (1–2), Spieler (bis 14)
   - **Turnier**: keine feste Gegnerschaft, dafür ein oder zwei eigene Teams,
     je mit eigenem Namen, Trainer (1–2) und beliebig vielen Spielern
-  In beiden Fällen frei erfassbare Gastspieler und Torhüter-Markierung
+  In beiden Fällen frei erfassbare Gastspieler sowie Torhüter- (auch mehrere
+  gleichzeitig möglich) und Captain-Markierung
 - Treffpunkt/-zeit werden vorgeschlagen: 1 Stunde vor Anpfiff am Spielort, bei
   Auswärtsspielen bzw. im Turnier-Modus abzüglich Fahrzeit ab Bülach (Treffpunkt
   dann ein fester, pro Team einstellbarer Ort) – einmal erfasste Fahrzeiten pro
   Sportplatz werden für spätere Aufgebote automatisch vorgeschlagen
 - «Nicht im Aufgebot» wird automatisch aus dem Kader berechnet und mit aufgeführt
-- Die Angaben im Aufgebot (Wann, Besammlungszeit/-ort, Adresse, Mitnehmen, …) lassen
-  sich per Griff-Symbol frei sortieren und um eigene Zusatzfelder (Bezeichnung +
-  Text) ergänzen oder wieder löschen – die gewählte Reihenfolge erscheint genauso
-  im Ausdruck. Versehentlich gelöschte Standardfelder lassen sich mit einem
-  Klick wiederherstellen, ohne dass dabei etwas verloren geht
-- Ergebnis ist ein fertiges Aufgebot im Look der bisherigen Papier-Vorlage, druckbar
-  bzw. als PDF sicherbar wie der Anwesenheitsbericht
+- Die Angaben im Aufgebot (Wann, Besammlungszeit/-ort, Adresse, Spieldauer/
+  Turnierzeit, Mitnehmen, …) lassen sich per Griff-Symbol frei sortieren und um
+  eigene Zusatzfelder (Bezeichnung + Text) ergänzen oder wieder löschen – die
+  gewählte Reihenfolge erscheint genauso im Ausdruck. Versehentlich gelöschte
+  Standardfelder lassen sich mit einem Klick wiederherstellen, ohne dass dabei
+  etwas verloren geht. Vorausgefüllte Vorschläge (Besammlungszeit/-ort,
+  Spieldauer/Turnierzeit, Mitnehmen) lassen sich pro Aufgebot per Stift-Symbol
+  individuell anpassen
+- Ergebnis ist ein fertiges Aufgebot im Look der bisherigen Papier-Vorlage,
+  druckbar bzw. als PDF sicherbar wie der Anwesenheitsbericht – passt beim
+  Drucken immer auf eine einzelne DIN-A4-Seite, unabhängig davon, ob vom
+  Computer oder Mobilgerät gedruckt wird
 - Bereits erstellte Aufgebote lassen sich jederzeit wieder öffnen und anpassen
 
 ## Datensparsamkeit

@@ -230,20 +230,25 @@ und Server hin- und herwandert und was in `_daten` liegt.
   "callups": [                 // Aufgebote, siehe Abschnitt 4a
     { "id": "cu-ab12cd", "matchId": "s1",           // Form bei callupMode "match"
       "meetTime": "08:35", "meetPlace": "Militärparkplatz Bülach", "travelMinutes": 25,
-      "coachIds": ["c1", "c4"], "playerIds": ["p1", "p2", "…"], "keeperId": "p1",
+      "coachIds": ["c1", "c4"], "playerIds": ["p1", "p2", "…"],
+      "keeperIds": ["p1"],      // Array, beliebig viele TW (frueher "keeperId": einzelner String)
+      "captainId": "p2",        // EIN Captain (String, kein Array wie bei keeperIds)
+      "duration": "12:00–14:00 Uhr",       // editierbarer Vorschlag, Default = timeRange(match)
+      "mitnehmen": "Trikot, Schuhe, …",     // editierbarer Vorschlag, Default = settings.callupNotes
       "guests": [{ "name": "Arel", "team": "D9c" }],
       "rows": [                                     // Reihenfolge/Auswahl der Infotabelle im Ausdruck
         { "key": "notcalled", "kind": "auto" }, { "key": "wann", "kind": "auto" },
         { "key": "meettime", "kind": "field" }, { "key": "meetplace", "kind": "field" },
-        { "key": "duration", "kind": "auto" }, { "key": "addr", "kind": "field" },
-        { "key": "mitnehmen", "kind": "team" },
+        { "key": "duration", "kind": "field" }, { "key": "addr", "kind": "field" },
+        { "key": "mitnehmen", "kind": "field" },
         { "key": "row-x1y2z3", "kind": "custom", "label": "Verpflegung", "value": "Banane, Riegel" }
       ] },
     { "id": "cu-ef34gh", "matchId": "s2",           // Form bei callupMode "tournament"
       "meetTime": "08:45", "meetPlace": "Militärparkplatz beim Sportplatz Erachfeld", "travelMinutes": 15,
+      "duration": "Turnierzeit 09:00–13:00 Uhr", "mitnehmen": "Trikot, Schuhe, …",
       "squads": [
-        { "name": "Team A", "coachIds": ["c1"], "playerIds": ["p1", "…"], "keeperId": "p1" },
-        { "name": "Team B", "coachIds": ["c2"], "playerIds": ["p7", "…"], "keeperId": "" }
+        { "name": "Team A", "coachIds": ["c1"], "playerIds": ["p1", "…"], "keeperIds": ["p1"], "captainId": "p1" },
+        { "name": "Team B", "coachIds": ["c2"], "playerIds": ["p7", "…"], "keeperIds": [], "captainId": "" }
       ],
       "guests": [] }
   ]
