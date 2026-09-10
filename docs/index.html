@@ -2417,7 +2417,20 @@ var ACT = {
   print: function(){
     var paper = document.querySelector(".capaper");
     if (paper) fitCapaperOnePage(paper);
-    try { window.print(); } catch(e){ toast("Der Browser hat das Drucken blockiert – bitte über das Browsermenü drucken."); }
+    // Browser schlagen beim "Drucken"/"Als PDF sichern" den Seitentitel als
+    // Dateinamen vor - fuers Aufgebot soll das "Aufgebot.pdf" sein statt des
+    // App-Titels. afterprint stellt den Titel zuverlaessig wieder her, auch
+    // wenn der Druckdialog asynchron (nicht blockierend) laeuft.
+    var prevTitle = document.title;
+    if (paper) {
+      document.title = "Aufgebot";
+      var restoreTitle = function(){ document.title = prevTitle; window.removeEventListener("afterprint", restoreTitle); };
+      window.addEventListener("afterprint", restoreTitle);
+    }
+    try { window.print(); } catch(e){
+      if (paper) document.title = prevTitle;
+      toast("Der Browser hat das Drucken blockiert – bitte über das Browsermenü drucken.");
+    }
   },
   pin: function(t){ addDigit(t.getAttribute("data-d")); },
   pinok: function(){ submitPin(UNLOCKED ? "admin" : "app"); },

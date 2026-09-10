@@ -566,6 +566,15 @@ Freitext raten; die muss einmalig in "Termine" nachgetragen werden.
   jedem Drucktreiber gleich behandelt. `.ca-tight` ist die unterste Stufe –
   bei absurd langem Inhalt (z. B. sehr lange freie Notizen) wird nicht
   darunter verkleinert, um die Lesbarkeit nicht zu gefährden.
+- **Dateiname beim "Als PDF sichern" ist "Aufgebot.pdf"** statt des sonst
+  vorgeschlagenen Seitentitels "Trainingspräsenz": Browser schlagen dafür
+  `document.title` als Dateiname vor. `ACT.print` setzt `document.title`
+  darum kurz vor `window.print()` auf `"Aufgebot"` – aber NUR, wenn `.capaper`
+  existiert (Aufgebot-Druckansicht); der Anwesenheitsbericht (`.report`)
+  behält weiterhin den App-Titel als Dateinamen. Zurückgesetzt wird über das
+  `afterprint`-Event (nicht direkt nach `window.print()`, da der Druckdialog
+  in manchen Browsern asynchron/nicht-blockierend ist) bzw. sofort im
+  `catch`, falls der Browser das Drucken blockiert.
 
 ---
 
