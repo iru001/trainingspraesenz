@@ -2,16 +2,15 @@
 
 Diese Datei ist die Übergabe an jedes weitere System, das an diesem Projekt arbeitet. Zu Beginn lesen, vor dem Abschluss der eigenen Änderung nachtragen. Keine PINs und keine Inhalte aus der Google-Tabelle hier eintragen.
 
-**Zuletzt nachgetragen:** 10. November 2026, 22:11 Uhr (Europe/Zurich)
+**Zuletzt nachgetragen:** 10. November 2026, 22:15 Uhr (Europe/Zurich)
 
 ## Wo die Arbeit liegt
 
-- Branch: `cursor/save-reliability-a701`
-- Pull Request: https://github.com/iru001/trainingspraesenz/pull/1 (offen, noch nicht auf `main`)
-- Die Spitze dieses Branches ist der aktuelle Stand, inklusive dieser Datei.
+- `main` ist der aktuelle Stand. Merge-Commit: `1a816c0` — «Speichern absichern und Anzeige korrigieren (#1)», gemergt am 10. November 2026, 22:13 Uhr (Europe/Zurich) durch Irfan Uyar.
+- Pull Request: https://github.com/iru001/trainingspraesenz/pull/1 (gemergt)
 - Fachliche Änderungen: `9882952` — «Speichern absichern und die Anzeige an die Quote anpassen»
 - Backup vor diesen Änderungen: Branch `cursor/backup-before-fixes-a701`, Commit `cd553ea`. Wiederherstellen durch Auschecken dieses Branches.
-- `main` hat den neuen Stand noch nicht. Die Datei `apps-script/Code.gs` auf `main` ist die alte Fassung. Bei Google läuft für beide Teams bereits die neue Fassung, siehe unten.
+- GitHub Pages hat den Stand `1a816c0` gebaut. Die App unter https://iru001.github.io/trainingspraesenz/ enthält die neue Anzeige.
 
 ## Erledigt im Pull Request
 
@@ -33,7 +32,7 @@ Am 10. November 2026, abends (Europe/Zurich), wurden die bestehenden Web-Apps au
 - FA 2018, Tabelle «Trainingspräsenz FA 2018»: Version 7, vorher Version 6.
 - Db, Tabelle «Trainingspräsenz D9b»: Version 6, vorher Version 5. Der Tabellenname lautet D9b. Die Web-App-Adresse ist die von Team `db`.
 
-Die sichtbare App auf GitHub Pages kommt weiterhin von `main`, bis Pull Request #1 gemergt ist. Das neue Skript versteht die bisherige App: eine Speicherung ohne das Feld `render` zeichnet alle Blätter.
+Die sichtbare App auf GitHub Pages kommt von `main` und ist seit dem Merge auf dem neuen Stand. Das neue Skript versteht auch eine ältere App: eine Speicherung ohne das Feld `render` zeichnet alle Blätter.
 
 ## Zuletzt in der echten Tabelle geprüft
 
@@ -41,8 +40,7 @@ Am 10. November 2026, 22:11 Uhr (Europe/Zurich), nur gelesen, nichts geschrieben
 
 ## Offen
 
-- Pull Request #1 ist nicht gemergt. Die Anzeige-Änderungen (Quote, Terminliste, Entwurf, PIN-Hinweis, Schreibkette) sind für die Trainer erst nach dem Merge auf GitHub Pages sichtbar.
-- Das Skript wurde in den automatischen Tests nur gegen den Nachbau in `tests/gas-harness.mjs` ausgeführt. Die eine echte Speicherung oben ist angekommen; ein zweites Team und ein Konfliktfall in der echten Tabelle sind damit nicht geprüft.
+- Das Skript wurde in den automatischen Tests nur gegen den Nachbau in `tests/gas-harness.mjs` ausgeführt. Die eine echte Speicherung bei D9b ist angekommen; ein zweites Team und ein Konfliktfall in der echten Tabelle sind damit nicht geprüft.
 
 ## Nicht nebenbei ändern
 
