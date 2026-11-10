@@ -132,9 +132,10 @@ später zum Team stösst, bekommt dadurch keine rückwirkenden Fehlzeiten.
 
 ## Zugriff
 
-Wer den Artifact-Link mit **Bearbeitungsrecht** hat, kann erfassen und
-administrieren. Wer ihn nur zum Ansehen bekommt, sieht die Auswertung, kann aber
-nichts verändern – die App schaltet in diesem Fall in den Nur-Lese-Modus.
+Wer den App-PIN hat, kann Anwesenheiten erfassen und den Admin-Bereich öffnen.
+Der Admin-PIN ist eine zusätzliche Schwelle gegen versehentliches Ändern, kein
+zweiter Zugangsschutz. Ohne App-PIN gibt der Server keine Daten heraus. Die App
+hat keinen gesonderten Nur-Lese-Modus.
 
 ## Technik
 
