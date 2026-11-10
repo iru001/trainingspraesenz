@@ -2,7 +2,7 @@
 
 Diese Datei ist die Übergabe an jedes weitere System, das an diesem Projekt arbeitet. Zu Beginn lesen, vor dem Abschluss der eigenen Änderung nachtragen. Keine PINs und keine Inhalte aus der Google-Tabelle hier eintragen.
 
-**Zuletzt nachgetragen:** 10. November 2026, 21:24 Uhr (Europe/Zurich)
+**Zuletzt nachgetragen:** 10. November 2026, 22:11 Uhr (Europe/Zurich)
 
 ## Wo die Arbeit liegt
 
@@ -35,11 +35,14 @@ Am 10. November 2026, abends (Europe/Zurich), wurden die bestehenden Web-Apps au
 
 Die sichtbare App auf GitHub Pages kommt weiterhin von `main`, bis Pull Request #1 gemergt ist. Das neue Skript versteht die bisherige App: eine Speicherung ohne das Feld `render` zeichnet alle Blätter.
 
+## Zuletzt in der echten Tabelle geprüft
+
+Am 10. November 2026, 22:11 Uhr (Europe/Zurich), nur gelesen, nichts geschrieben. FA 2018 hat heute keine neue Erfassung; die Datei wurde zuletzt um 21:21 Uhr angefasst, passend zur Skript-Veröffentlichung. Bei D9b ist um 22:07 Uhr eine neue Erfassung angekommen und in `Termine` sichtbar. Die Quote dort rechnet ohne `NA` und ohne inaktive Spieler. Keine PIN und keine Namensliste hier.
+
 ## Offen
 
 - Pull Request #1 ist nicht gemergt. Die Anzeige-Änderungen (Quote, Terminliste, Entwurf, PIN-Hinweis, Schreibkette) sind für die Trainer erst nach dem Merge auf GitHub Pages sichtbar.
-- In der echten App wurde danach noch nicht geprüft, ob eine kleine Änderung mit dem gewohnten PIN gespeichert wird.
-- Das Skript wurde in den automatischen Tests nur gegen den Nachbau in `tests/gas-harness.mjs` ausgeführt.
+- Das Skript wurde in den automatischen Tests nur gegen den Nachbau in `tests/gas-harness.mjs` ausgeführt. Die eine echte Speicherung oben ist angekommen; ein zweites Team und ein Konfliktfall in der echten Tabelle sind damit nicht geprüft.
 
 ## Nicht nebenbei ändern
 
