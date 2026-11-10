@@ -2,7 +2,7 @@
 
 Diese Datei ist die Übergabe an jedes weitere System, das an diesem Projekt arbeitet. Zu Beginn lesen, vor dem Abschluss der eigenen Änderung nachtragen. Keine PINs und keine Inhalte aus der Google-Tabelle hier eintragen.
 
-**Zuletzt nachgetragen:** 10. November 2026, 22:15 Uhr (Europe/Zurich)
+**Zuletzt nachgetragen:** 10. November 2026, 23:25 Uhr (Europe/Zurich)
 
 ## Wo die Arbeit liegt
 
@@ -37,6 +37,10 @@ Die sichtbare App auf GitHub Pages kommt von `main` und ist seit dem Merge auf d
 ## Zuletzt in der echten Tabelle geprüft
 
 Am 10. November 2026, 22:11 Uhr (Europe/Zurich), nur gelesen, nichts geschrieben. FA 2018 hat heute keine neue Erfassung; die Datei wurde zuletzt um 21:21 Uhr angefasst, passend zur Skript-Veröffentlichung. Bei D9b ist um 22:07 Uhr eine neue Erfassung angekommen und in `Termine` sichtbar. Die Quote dort rechnet ohne `NA` und ohne inaktive Spieler. Keine PIN und keine Namensliste hier.
+
+## Hallenturniere
+
+Am 10. November 2026, 23:25 Uhr (Europe/Zurich), wurden fehlende Hallenturnier-Termine in `_daten` ergänzt, ohne neue Spieler und ohne Aufgebote. FA 2018: 6 neue Termine, 5 bestehende Hallenturniere unverändert. D9b: 5 neue Termine. Unbekannte Startzeit bleibt leer und steht als «Zeit offen» in der Bezeichnung. «nicht bestätigt» steht in der Bezeichnung. Die Blätter `Termine` und `Aufgebote` zeichnet die App beim nächsten Speichern neu. In der App sind die Termine nach einem Neuladen sichtbar.
 
 ## Offen
 
