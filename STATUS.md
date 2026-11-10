@@ -2,7 +2,7 @@
 
 Diese Datei ist die Übergabe an jedes weitere System, das an diesem Projekt arbeitet. Zu Beginn lesen, vor dem Abschluss der eigenen Änderung nachtragen. Keine PINs und keine Inhalte aus der Google-Tabelle hier eintragen.
 
-**Zuletzt nachgetragen:** 10. November 2026, 20:17 Uhr (Europe/Zurich)
+**Zuletzt nachgetragen:** 10. November 2026, 21:24 Uhr (Europe/Zurich)
 
 ## Wo die Arbeit liegt
 
@@ -11,7 +11,7 @@ Diese Datei ist die Übergabe an jedes weitere System, das an diesem Projekt arb
 - Die Spitze dieses Branches ist der aktuelle Stand, inklusive dieser Datei.
 - Fachliche Änderungen: `9882952` — «Speichern absichern und die Anzeige an die Quote anpassen»
 - Backup vor diesen Änderungen: Branch `cursor/backup-before-fixes-a701`, Commit `cd553ea`. Wiederherstellen durch Auschecken dieses Branches.
-- `main` hat den neuen Stand noch nicht. `apps-script/Code.gs` auf `main` ist die alte Fassung.
+- `main` hat den neuen Stand noch nicht. Die Datei `apps-script/Code.gs` auf `main` ist die alte Fassung. Bei Google läuft für beide Teams bereits die neue Fassung, siehe unten.
 
 ## Erledigt im Pull Request
 
@@ -26,26 +26,23 @@ Diese Datei ist die Übergabe an jedes weitere System, das an diesem Projekt arb
 - Tests: `npm test` (21 Tests, grün am 10. November 2026). Backend über `tests/gas-harness.mjs`, Frontend über jsdom. Browserprüfung gegen `node tests/browser-server.mjs` auf `http://127.0.0.1:8765/`, ohne die echten Google-Adressen.
 - `docs/config.js` wurde nicht geändert.
 
-## Was die betreuende Person noch selbst tun muss
+## Bei Google bereits veröffentlicht
 
-Das neue `apps-script/Code.gs` läuft bei Google erst nach einer neuen Version der **bestehenden** Web-App. Das ist für **beide** Tabellen nötig, FA 2018 und Db. Keine neue Bereitstellung anlegen, sonst ändert sich die Adresse.
+Am 10. November 2026, abends (Europe/Zurich), wurden die bestehenden Web-Apps auf die neue `Code.gs` dieses Branches gebracht. Die `/exec`-Adressen sind gleich geblieben und stimmen mit `docs/config.js` überein. Es wurde keine neue Bereitstellung angelegt. Die PIN-Zeilen im Skript blieben leer, die Skript-Eigenschaften wurden nicht gelesen.
 
-1. Den Text von diesem Branch nehmen: https://raw.githubusercontent.com/iru001/trainingspraesenz/cursor/save-reliability-a701/apps-script/Code.gs
-2. In der jeweiligen Tabelle: Erweiterungen → Apps Script, gesamten Inhalt von `Code.gs` ersetzen, speichern.
-3. `ERSTER_PIN` und `ERSTER_ADMIN_PIN` leer lassen. Der gültige PIN liegt schon in den Skript-Eigenschaften.
-4. Bereitstellen → Bereitstellungen verwalten → Stift → Version: Neue Version → Bereitstellen. Zugriff bleibt «Jeder», ausführen als «Ich». Die `/exec`-Adresse bleibt gleich.
-5. In der App mit dem gewohnten PIN prüfen, ob eine kleine Änderung gespeichert wird.
+- FA 2018, Tabelle «Trainingspräsenz FA 2018»: Version 7, vorher Version 6.
+- Db, Tabelle «Trainingspräsenz D9b»: Version 6, vorher Version 5. Der Tabellenname lautet D9b. Die Web-App-Adresse ist die von Team `db`.
 
-`docs/config.js` danach nicht anfassen.
+Die sichtbare App auf GitHub Pages kommt weiterhin von `main`, bis Pull Request #1 gemergt ist. Das neue Skript versteht die bisherige App: eine Speicherung ohne das Feld `render` zeichnet alle Blätter.
 
 ## Offen
 
-- Pull Request #1 ist nicht gemergt. Solange das so ist, sieht `main` die Änderungen nicht.
-- Die beiden Google-Skripte sind noch nicht auf die neue Fassung gebracht. Bis dahin speichert die live App mit dem alten Verhalten.
-- Das Skript wurde nicht gegen das echte Google Apps Script ausgeführt, nur gegen den Nachbau in `tests/gas-harness.mjs`.
+- Pull Request #1 ist nicht gemergt. Die Anzeige-Änderungen (Quote, Terminliste, Entwurf, PIN-Hinweis, Schreibkette) sind für die Trainer erst nach dem Merge auf GitHub Pages sichtbar.
+- In der echten App wurde danach noch nicht geprüft, ob eine kleine Änderung mit dem gewohnten PIN gespeichert wird.
+- Das Skript wurde in den automatischen Tests nur gegen den Nachbau in `tests/gas-harness.mjs` ausgeführt.
 
 ## Nicht nebenbei ändern
 
-- `docs/config.js`: echte Team-Adressen und Logos. Tests bauen sich eine eigene Konfiguration.
+- `docs/config.js`: echte Team-Adressen und Logos. Tests bauen sich eine eigene Konfiguration. Die Google-Skripte sind schon auf der neuen Fassung. Nicht noch einmal eine neue Bereitstellung anlegen.
 - PINs stehen nicht im Repository. Nicht aus der Tabelle oder aus den Skript-Eigenschaften auslesen und hier nicht wiederholen.
 - Eigene Eingaben in den lesbaren Blättern der Google-Tabelle werden beim Speichern ersetzt. Geändert wird in der App.
