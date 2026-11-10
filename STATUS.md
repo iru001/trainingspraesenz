@@ -8,7 +8,8 @@ Diese Datei ist die Übergabe an jedes weitere System, das an diesem Projekt arb
 
 - Branch: `cursor/save-reliability-a701`
 - Pull Request: https://github.com/iru001/trainingspraesenz/pull/1 (offen, noch nicht auf `main`)
-- Letzter Commit auf dem Branch: `9882952` — «Speichern absichern und die Anzeige an die Quote anpassen»
+- Die Spitze dieses Branches ist der aktuelle Stand, inklusive dieser Datei.
+- Fachliche Änderungen: `9882952` — «Speichern absichern und die Anzeige an die Quote anpassen»
 - Backup vor diesen Änderungen: Branch `cursor/backup-before-fixes-a701`, Commit `cd553ea`. Wiederherstellen durch Auschecken dieses Branches.
 - `main` hat den neuen Stand noch nicht. `apps-script/Code.gs` auf `main` ist die alte Fassung.
 
