@@ -18,6 +18,7 @@ var ERSTER_PIN = '';          // z. B. '482915'
 var ERSTER_ADMIN_PIN = '';    // z. B. '204871'
 
 var DATA_SHEET = '_daten';        // technisches Blatt mit dem Datenbestand
+var DATA_SHEET_NEXT = '_daten_neu'; // Zwischenspeicher, damit ein Abbruch den alten Stand nicht loescht
 var CHUNK = 40000;                // max. Zeichen pro Zelle
 var LOCK_MS = 25000;
 
@@ -80,21 +81,21 @@ function handle(p) {
         // Jemand anders war schneller - die aktuelle Fassung zurueckgeben.
         return { ok: false, error: 'conflict', state: withPins(state, pins) };
       }
+      var pinBad = pinChangeError(incoming, pins);
+      if (pinBad) return { ok: false, error: pinBad };
       incoming.rev = Number(state.rev || 0) + 1;
       savePins(incoming, pins);            // neue PIN ggf. in die Eigenschaften uebernehmen
       writeState(stripPins(incoming));     // im Blatt landet die PIN nie
-      // Sperre HIER schon freigeben: renderSheets() schreibt mehrere lesbare
-      // Blaetter (Kader/Trainer/Auswertung/Termine/Aufgebote/Matrix/Legende)
-      // und ist dadurch der mit Abstand langsamste Teil einer Speicherung.
-      // Liefe das noch innerhalb der Sperre, wuerde es jede andere Anfrage
-      // (auch ein simples Einloggen/"load") fuer die gesamte Dauer blockieren -
-      // obwohl renderSheets() nie von readState() gelesen wird (das liest nur
-      // das Blatt "_daten", welches an dieser Stelle bereits sicher geschrieben
-      // ist). Die eigentlich schuetzenswerte Operation (writeState) ist hier
-      // bereits abgeschlossen.
+      var myRev = incoming.rev;
+      // Sperre HIER schon freigeben: der Blattaufbau ist der langsamste Teil
+      // und liest "_daten" nicht neben einem laufenden Schreiben (dafuer nimmt
+      // renderLatest selbst kurz die Skript-Sperre). Zu-/Absagen zeichnen nur
+      // "Trainerplanung" (render: "planning"); alles andere den vollen Satz.
+      // "none" laesst die Blaetter bewusst unveraendert.
+      var mode = (p.render === 'planning' || p.render === 'none') ? p.render : 'all';
       lock.releaseLock(); released = true;
-      try { renderSheets(incoming); } catch (err) { /* Darstellung darf das Speichern nie verhindern */ }
-      return { ok: true, rev: incoming.rev };
+      try { renderLatest(mode); } catch (err) { /* Darstellung darf das Speichern nie verhindern */ }
+      return { ok: true, rev: myRev };
     }
     return { ok: true, state: withPins(state, pins), sheetUrl: book().getUrl() };
   } catch (err) {
@@ -122,6 +123,18 @@ function savePins(incoming, current) {
   var na = (s.adminPin !== undefined) ? String(s.adminPin) : current.admin;
   if (np !== current.pin) props.setProperty(PIN_KEY, np);
   if (na !== current.admin) props.setProperty(APIN_KEY, na);
+}
+// Ein neuer App-PIN muss aus mindestens vier Ziffern bestehen. Leer lassen
+// behaelt den bisherigen PIN (kein oeffentlicher Zugriff ohne PIN). Der
+// bestehende Wert darf auch kuerzer sein, damit eine aeltere Einrichtung
+// weiterhin speichern kann.
+function pinChangeError(incoming, current) {
+  var s = (incoming && incoming.settings) || {};
+  if (s.pin === undefined || String(s.pin) === '') return null;
+  var next = String(s.pin);
+  if (next === String(current.pin || '')) return null;
+  if (!/^[0-9]{4,16}$/.test(next)) return 'bad_pin';
+  return null;
 }
 function stripPins(state) {
   var c = JSON.parse(JSON.stringify(state));
@@ -190,12 +203,22 @@ function json(o) {
 
 function book() { return SpreadsheetApp.getActiveSpreadsheet(); }
 
+function hideQuiet(sh) {
+  try { sh.hideSheet(); } catch (err) {}
+}
+
 function dataSheet() {
   var sh = book().getSheetByName(DATA_SHEET);
-  if (!sh) {
-    sh = book().insertSheet(DATA_SHEET);
-    sh.hideSheet();
+  if (sh) return sh;
+  // Abbruch zwischen Loeschen und Umbenennen: der neue Stand liegt noch unter dem Zwischennamen.
+  var neu = book().getSheetByName(DATA_SHEET_NEXT);
+  if (neu) {
+    neu.setName(DATA_SHEET);
+    hideQuiet(neu);
+    return neu;
   }
+  sh = book().insertSheet(DATA_SHEET);
+  hideQuiet(sh);
   return sh;
 }
 
@@ -216,14 +239,66 @@ function readState() {
   return JSON.parse(raw);
 }
 
+// Schreibt zuerst vollstaendig nach _daten_neu und tauscht erst danach.
+// Schlaegt setValues fehl, bleibt _daten unangetastet.
 function writeState(state) {
   var raw = JSON.stringify(state);
   var parts = [];
   for (var i = 0; i < raw.length; i += CHUNK) parts.push([raw.substr(i, CHUNK)]);
   if (!parts.length) parts = [['']];
-  var sh = dataSheet();
-  sh.clear();
-  sh.getRange(1, 1, parts.length, 1).setValues(parts);
+  var tmp = book().getSheetByName(DATA_SHEET_NEXT);
+  if (!tmp) tmp = book().insertSheet(DATA_SHEET_NEXT);
+  else tmp.clear();
+  tmp.getRange(1, 1, parts.length, 1).setValues(parts);
+  var cur = book().getSheetByName(DATA_SHEET);
+  if (cur && cur.getSheetId() !== tmp.getSheetId()) book().deleteSheet(cur);
+  tmp.setName(DATA_SHEET);
+  hideQuiet(tmp);
+}
+
+// Kurzer Lesezugriff unter der Skript-Sperre, damit der Blattaufbau keinen
+// halb getauschten Bestand sieht. Die Sperre wird vor dem langsamen Zeichnen
+// wieder freigegeben.
+function readConsistent() {
+  var lock = LockService.getScriptLock();
+  lock.waitLock(LOCK_MS);
+  try { return readState(); }
+  finally { lock.releaseLock(); }
+}
+
+// Zeichnet die Blaetter zum juengsten gespeicherten Stand. Die Dokument-Sperre
+// reiht Aufbauten hintereinander; jeder Aufbau liest am Anfang neu. Aendert
+// sich die Revision waehrend des Zeichnens, wird der nun juengste Stand einmal
+// vollstaendig nachgezogen, bevor die Sperre frei wird.
+function renderLatest(mode) {
+  if (mode === 'none') return;
+  var dlock = null, locked = false;
+  try { dlock = LockService.getDocumentLock(); } catch (err) { dlock = null; }
+  if (dlock) {
+    try { dlock.waitLock(LOCK_MS); locked = true; } catch (err2) { locked = false; }
+  }
+  try {
+    var state = readConsistent();
+    drawState(state, mode);
+    var after = readConsistent();
+    if (Number(after.rev || 0) !== Number(state.rev || 0)) drawState(after, 'all');
+  } finally {
+    if (locked) dlock.releaseLock();
+  }
+}
+
+function drawState(state, mode) {
+  if (mode === 'planning') renderPlanningSheet(state);
+  else renderSheets(state);
+}
+
+function removeSheet(name) {
+  var sh = book().getSheetByName(name);
+  if (!sh) return;
+  try {
+    if (book().getSheets().length <= 1) return;
+    book().deleteSheet(sh);
+  } catch (err) {}
 }
 
 /* ============================ Lesbare Blätter ============================ */
@@ -260,9 +335,9 @@ function put(sh, rows, headerRows) {
 function nameOf(p) { return ((p.first || '') + ' ' + (p.last || '')).trim(); }
 
 function byLast(a, b) {
-  var x = ((a.last || '') + ' ' + (a.first || '')).toLowerCase();
-  var y = ((b.last || '') + ' ' + (b.first || '')).toLowerCase();
-  return x < y ? -1 : x > y ? 1 : 0;
+  var x = ((a.last || '') + ' ' + (a.first || '')).trim();
+  var y = ((b.last || '') + ' ' + (b.first || '')).trim();
+  return x.localeCompare(y, 'de', { sensitivity: 'base' });
 }
 
 function fmtDay(iso) {
@@ -320,6 +395,51 @@ function occInfo(state, occId) {
   return null;
 }
 
+// "na" zaehlt weder als anwesend noch als erfasst - gleiche Regel wie die
+// Spielerquote. Unbekannte Werte bleiben aussen vor.
+function sessionCounts(entries) {
+  var here = 0, tot = 0;
+  for (var k in (entries || {})) {
+    var v = entries[k];
+    if (v === 'na') continue;
+    if (v !== 'present' && v !== 'late' && v !== 'excused' && v !== 'absent') continue;
+    tot++;
+    if (v === 'present' || v === 'late') here++;
+  }
+  return { here: here, tot: tot };
+}
+
+function renderPlanningSheet(state) {
+  var avail = state.availability || {};
+  var occIds = Object.keys(avail).sort(function (a, b) {
+    var ia = occInfo(state, a), ib = occInfo(state, b);
+    var da = ia ? ia.date : '9999', db = ib ? ib.date : '9999';
+    if (da !== db) return da < db ? -1 : 1;
+    return a < b ? -1 : a > b ? 1 : 0;
+  });
+  if (!occIds.length) { removeSheet('Trainerplanung'); return; }
+  var sh = sheetNamed('Trainerplanung');
+  var coaches = state.coaches.slice().sort(byLast);
+  var rows = [['Datum', 'Wochentag', 'Art', 'Bezeichnung'].concat(
+    coaches.map(function (c) { return nameOf(c); }))];
+  occIds.forEach(function (occId) {
+    var info = occInfo(state, occId);
+    if (!info) return;
+    var row = [fmtDay(info.date), weekdayOf(info.date), info.type === 'match' ? 'Wettkampf' : 'Training', info.label || ''];
+    coaches.forEach(function (c) {
+      var a = avail[occId] && avail[occId][c.id];
+      if (!a || !a.status || a.status === 'pending') row.push('Ausstehend');
+      else if (a.status === 'confirmed') row.push('Verfügbar');
+      else if (a.status === 'uncertain') row.push('Ungewiss');
+      else if (a.status === 'declined') row.push('Nicht verfügbar' + (a.reason ? ' (' + a.reason + ')' : ''));
+      else row.push('');
+    });
+    rows.push(row);
+  });
+  if (rows.length < 2) { removeSheet('Trainerplanung'); return; }
+  put(sh, rows);
+}
+
 function renderSheets(state) {
   var players = state.players.slice().sort(byLast);
   var recs = state.records.slice().sort(function (a, b) { return a.date < b.date ? -1 : a.date > b.date ? 1 : 0; });
@@ -345,34 +465,9 @@ function renderSheets(state) {
   if (state.coaches.length) sh.getRange(2, 7, state.coaches.length, 1).setNumberFormat('0%');
 
   // --- Trainer-Planung (Zu-/Absagen) ---
-  // Zeigt nur Termine, zu denen mindestens eine Antwort vorliegt (Object.keys
-  // von state.availability) - Termine ganz ohne Antwort tauchen hier bewusst
-  // nicht auf, damit das Blatt nicht mit weit in der Zukunft liegenden,
-  // unbeantworteten Terminen ueberladen wird.
-  var avail = state.availability || {};
-  var occIds = Object.keys(avail).sort();
-  if (occIds.length) {
-    sh = sheetNamed('Trainerplanung');
-    var coaches = state.coaches.slice().sort(byLast);
-    var head2 = ['Datum', 'Wochentag', 'Art', 'Bezeichnung'].concat(
-      coaches.map(function (c) { return nameOf(c); }));
-    rows = [head2];
-    occIds.forEach(function (occId) {
-      var info = occInfo(state, occId);
-      if (!info) return; // Termin (Serie/Einzeltermin) wurde inzwischen geloescht
-      var row = [fmtDay(info.date), weekdayOf(info.date), info.type === 'match' ? 'Wettkampf' : 'Training', info.label || ''];
-      coaches.forEach(function (c) {
-        var a = avail[occId] && avail[occId][c.id];
-        if (!a || !a.status || a.status === 'pending') row.push('Ausstehend');
-        else if (a.status === 'confirmed') row.push('Verfügbar');
-        else if (a.status === 'uncertain') row.push('Ungewiss');
-        else if (a.status === 'declined') row.push('Nicht verfügbar' + (a.reason ? ' (' + a.reason + ')' : ''));
-        else row.push('');
-      });
-      rows.push(row);
-    });
-    put(sh, rows);
-  }
+  // Zeigt nur Termine, zu denen mindestens eine Antwort vorliegt. Ohne Antwort
+  // wird ein frueheres Blatt entfernt, damit keine veralteten Zeilen stehen bleiben.
+  renderPlanningSheet(state);
 
   // --- Auswertung ---
   var stats = {};
@@ -400,16 +495,16 @@ function renderSheets(state) {
   sh = sheetNamed('Termine');
   rows = [['Datum', 'Wochentag', 'Von', 'Bis', 'Art', 'Bezeichnung', 'Trainer', 'Anwesend', 'Erfasst', 'Quote', 'Notiz']];
   recs.forEach(function (r) {
-    var here = 0, tot = 0;
-    for (var k in r.entries) { tot++; if (r.entries[k] === 'present' || r.entries[k] === 'late') here++; }
+    var sc = sessionCounts(r.entries);
     rows.push([fmtDay(r.date), weekdayOf(r.date), r.time || '', r.timeEnd || '',
       r.type === 'match' ? 'Wettkampf' : 'Training', r.label || '', coachNames(state, r.coachIds),
-      here, tot, tot ? here / tot : '', r.note || '']);
+      sc.here, sc.tot, sc.tot ? sc.here / sc.tot : '', r.note || '']);
   });
   put(sh, rows);
   if (recs.length) sh.getRange(2, 10, recs.length, 1).setNumberFormat('0%');
 
   // --- Aufgebote ---
+  if (!(state.callups || []).length) removeSheet('Aufgebote');
   if ((state.callups || []).length) {
     sh = sheetNamed('Aufgebote');
     var singlesById = {};
@@ -452,7 +547,8 @@ function renderSheets(state) {
       rows.push([fmtDay(m.date), m.opponent || '', cu.squads ? 'Turnier' : (m.homeAway === 'home' ? 'Heim' : 'Auswärts'),
         cu.meetTime || '', cu.meetPlace || '', coachN, names.join(', '), names.length]);
     });
-    put(sh, rows);
+    if (rows.length < 2) removeSheet('Aufgebote');
+    else put(sh, rows);
   }
 
   // --- Matrix ---

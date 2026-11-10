@@ -527,7 +527,7 @@ var DB = null;           // wird nach der PIN-Eingabe vom Server geladen
 var REV = 0;             // Stand des Datenbestands (verhindert Überschreiben)
 var PIN = "";            // App-PIN dieser Sitzung
 var SHEETURL = "";       // Adresse der Google-Tabelle
-var UI = {view:"events", occ:null, statType:"all", statRange:"season", statSort:"quote", adminTab:"players", callup:null, callupPrintId:null};
+var UI = {view:"events", occ:null, statType:"all", statRange:"season", statSort:"quote", adminTab:"players", callup:null, callupPrintId:null, doneLimit:60};
 var RO = false;          // Nur-Lese-Modus (in dieser Fassung nicht verwendet)
 var UNLOCKED = false;    // App-PIN eingegeben und Daten geladen
 var ADMIN_OK = false;    // Admin-PIN eingegeben
@@ -602,12 +602,41 @@ function fmtShort(isoStr){
 }
 function fullName(p){ return ((p.first || "") + " " + (p.last || "")).trim(); }
 function sortName(a,b){
-  var x = ((a.last||"") + " " + (a.first||"")).toLowerCase();
-  var y = ((b.last||"") + " " + (b.first||"")).toLowerCase();
-  return x < y ? -1 : x > y ? 1 : 0;
+  var x = ((a.last||"") + " " + (a.first||"")).trim();
+  var y = ((b.last||"") + " " + (b.first||"")).trim();
+  return x.localeCompare(y, "de", {sensitivity:"base"});
 }
 function byId(list, id){ for (var i=0;i<list.length;i++) if (list[i].id === id) return list[i]; return null; }
 function pct(n, d){ return d > 0 ? Math.round((n/d)*100) : 0; }
+// "na" zaehlt weder als anwesend noch als erfasst. Unbekannte Werte bleiben aussen vor.
+function sessionCounts(entries){
+  var here = 0, tot = 0;
+  for (var k in (entries || {})) {
+    var v = entries[k];
+    if (v === "na") continue;
+    if (v !== "present" && v !== "late" && v !== "excused" && v !== "absent") continue;
+    tot++;
+    if (v === "present" || v === "late") here++;
+  }
+  return {here: here, tot: tot};
+}
+function hasOwn(obj, key){ return !!obj && Object.prototype.hasOwnProperty.call(obj, key); }
+function matchOpponent(m){
+  if (hasOwn(m, "opponent") && m.opponent != null) return m.opponent;
+  return (m && m.label) || "";
+}
+function savedOr(obj, key, fallback){ return hasOwn(obj, key) ? obj[key] : fallback; }
+function appPinError(pin, current){
+  if (!pin) return "Der App-PIN kann nicht leer sein.";
+  if (pin !== (current || "") && pin.length < 4) return "Der App-PIN braucht mindestens 4 Ziffern.";
+  return "";
+}
+function holidayHorizonWarning(fromIso){
+  if (!HOLIDAYS_BUELACH.length) return "";
+  var last = HOLIDAYS_BUELACH[HOLIDAYS_BUELACH.length - 1].to;
+  if (last < addDays(fromIso || todayISO(), 365)) return last;
+  return "";
+}
 function typeLabel(t){ return t === "match" ? "Wettkampf" : "Training"; }
 function el(id){ return document.getElementById(id); }
 function timeRange(o){
@@ -643,7 +672,9 @@ async function apiCall(payload){
   return data;
 }
 function apiLoad(pin){ return apiCall({action:"load", pin:pin}); }
-function apiSave(pin, state, rev){ return apiCall({action:"save", pin:pin, state:state, rev:rev}); }
+function apiSave(pin, state, rev, renderMode){
+  return apiCall({action:"save", pin:pin, state:state, rev:rev, render: renderMode || "all"});
+}
 
 function failText(err){
   var e = err && err.error;
@@ -653,6 +684,7 @@ function failText(err){
   if (e === "timeout") return "Der Server antwortet nicht. Das Mobilfunknetz ist vielleicht zu langsam – bitte nochmals versuchen.";
   if (e === "too_large") return "Die Datenmenge ist zu gross. Bitte Rücksprache halten.";
   if (e === "bad_state") return "Die Daten konnten nicht gespeichert werden (unerwartetes Format). Bitte die Seite neu laden.";
+  if (e === "bad_pin") return "Der App-PIN braucht mindestens 4 Ziffern.";
   if (e === "nopin") return "Im Google-Skript ist noch kein PIN gesetzt. Trage oben in der Datei Code.gs bei ERSTER_PIN einen PIN ein (siehe SETUP.md).";
   return "Keine Verbindung zum Server. Internetverbindung prüfen und nochmals versuchen.";
 }
@@ -688,18 +720,34 @@ async function boot(pin){
     PINBUF = "";
     setStoredPin(TEAM.id, pin);
     checkAdmin();
+    AVAIL_PENDING = loadPendingAvail();
+    if (AVAIL_PENDING.length) reapplyPending();
     render();
+    if (AVAIL_PENDING.length) runAvailabilitySaveLoop();
     return true;
   } catch(err) {
     LOADING = false; FAIL = failText(err); render(); return false;
   }
 }
 
+// Eine Kette fuer Anwesenheit und Zu-/Absagen: nie zwei Speichervorgaenge
+// gleichzeitig, die Revision bleibt monoton.
+var WRITE_TAIL = Promise.resolve();
+var WRITE_ACTIVE = false;
+function enqueueWrite(task){
+  var run = WRITE_TAIL.then(function(){ return task(); }, function(){ return task(); });
+  WRITE_TAIL = run.then(function(){}, function(){});
+  return run;
+}
+
 async function refresh(){
-  if (!UNLOCKED || BUSY || LOADING || UI.view === "record") return;
+  if (!UNLOCKED || BUSY || WRITE_ACTIVE || LOADING || AVAIL_PENDING.length || UI.view === "record") return;
   try {
     var r = await apiLoad(PIN);
-    if (r.ok && Number(r.state.rev || 0) !== REV) {
+    if (!UNLOCKED || BUSY || WRITE_ACTIVE || AVAIL_PENDING.length) return;
+    // Nur einen juengeren Stand uebernehmen. Eine verspaetete Antwort mit
+    // kleinerer Revision darf die gerade gespeicherten Daten nicht zurueckdrehen.
+    if (r.ok && Number(r.state && r.state.rev || 0) > REV) {
       DB = normalize(r.state); REV = Number(DB.rev || 0); render();
       toast("Daten wurden auf den aktuellen Stand gebracht.");
     }
@@ -707,14 +755,23 @@ async function refresh(){
 }
 
 async function commit(mutate, msg, nextUI){
-  if (BUSY) return false;
-  var backup = JSON.stringify(DB);
+  if (BUSY || !DB) return false;
   BUSY = true;
+  var backup = JSON.stringify(DB);
   try { mutate(DB); } catch(e){ BUSY = false; DB = JSON.parse(backup); throw e; }
   render();
   try {
-    var r = await apiSave(PIN, DB, REV);
+    return await enqueueWrite(function(){ return commitSave(backup, msg, nextUI); });
+  } finally {
     BUSY = false;
+    if (AVAIL_PENDING.length && UNLOCKED) runAvailabilitySaveLoop();
+  }
+}
+
+async function commitSave(backup, msg, nextUI){
+  WRITE_ACTIVE = true;
+  try {
+    var r = await apiSave(PIN, DB, REV, "all");
     if (r.ok) {
       REV = Number(r.rev || REV + 1); DB.rev = REV;
       if (nextUI) for (var k in nextUI) UI[k] = nextUI[k];
@@ -723,22 +780,32 @@ async function commit(mutate, msg, nextUI){
       return true;
     }
     if (r.error === "conflict" && r.state) {
-      DB = normalize(r.state); REV = Number(DB.rev || 0); render();
+      DB = normalize(r.state); REV = Number(DB.rev || 0);
+      reapplyPending();
+      render();
       toast("Jemand anderes hat zuerst gespeichert. Der aktuelle Stand ist jetzt geladen – bitte nochmals eintragen.");
       return false;
     }
     if (r.error === "pin") {
       DB = JSON.parse(backup); UNLOCKED = false; PINBUF = "";
+      AVAIL_PENDING = []; persistPendingAvail();
       try { if (TEAM) localStorage.removeItem("tp.pin." + TEAM.id); } catch(e){}
       render(); toast("Der PIN wurde geändert. Bitte neu anmelden.");
       return false;
     }
-    DB = JSON.parse(backup); render(); toast(r.message || failText({error: r.error}));
+    DB = JSON.parse(backup);
+    reapplyPending();
+    render();
+    toast(r.message || failText({error: r.error}));
     return false;
   } catch(err) {
-    DB = JSON.parse(backup); BUSY = false; render();
+    DB = JSON.parse(backup);
+    reapplyPending();
+    render();
     toast(failText(err));
     return false;
+  } finally {
+    WRITE_ACTIVE = false;
   }
 }
 
@@ -766,20 +833,37 @@ function applyAvailOp(db, op){
 var AVAIL_PENDING = [];   // noch nicht bestaetigte Zu-/Absagen, wartend auf Speicherung
 var AVAIL_SAVING = false;
 
+function availStorageKey(){ return TEAM ? "tp.avail." + TEAM.id : ""; }
+function loadPendingAvail(){
+  try {
+    var key = availStorageKey(); if (!key) return [];
+    var s = sessionStorage.getItem(key);
+    var arr = s ? JSON.parse(s) : [];
+    return Array.isArray(arr) ? arr.filter(function(op){ return op && op.occId && op.coachId && op.status; }) : [];
+  } catch(e){ return []; }
+}
+function persistPendingAvail(){
+  try {
+    var key = availStorageKey(); if (!key) return;
+    if (AVAIL_PENDING.length) sessionStorage.setItem(key, JSON.stringify(AVAIL_PENDING));
+    else sessionStorage.removeItem(key);
+  } catch(e){}
+}
+function reapplyPending(){
+  AVAIL_PENDING.forEach(function(op){ applyAvailOp(DB, op); });
+}
+
 /**
- * Speichert eine Zu-/Absage OHNE auf eine laufende Speicherung zu warten:
- * Jeder Tipp wird sofort lokal angewendet und angezeigt, das eigentliche
- * Speichern läuft im Hintergrund über eine Warteschlange. So kann man zügig
- * durch viele Termine durchtippen, ohne nach jedem einzelnen auf den Server
- * zu warten (der bisherige Weg über commit()-artiges Blockieren liess genau
- * das nicht zu). Bei einem Konflikt (jemand anderes war schneller) werden
- * alle noch offenen Tipps auf dem frischen Stand erneut angewendet, bevor
- * weitergespeichert wird - dabei geht nichts verloren.
+ * Speichert eine Zu-/Absage ohne die Oberflaeche zu blockieren. Der Tipp gilt
+ * sofort lokal; das Senden laeuft in derselben Schreibkette wie commit(), damit
+ * sich zwei Speicherungen nicht mit derselben Revision ueberholen. Offene Tipps
+ * liegen zusaetzlich in sessionStorage und werden nach einem Neuladen nachgezogen.
  */
 function commitAvailability(occId, coachId, status, reason){
-  var op = {occId: occId, coachId: coachId, status: status, reason: reason};
+  var op = {occId: occId, coachId: coachId, status: status, reason: reason || ""};
   applyAvailOp(DB, op);
   AVAIL_PENDING.push(op);
+  persistPendingAvail();
   UI.scroll = window.scrollY;
   render();
   runAvailabilitySaveLoop();
@@ -787,37 +871,54 @@ function commitAvailability(occId, coachId, status, reason){
 }
 
 async function runAvailabilitySaveLoop(){
-  if (AVAIL_SAVING) return;   // eine Schleife läuft schon und holt neue Tipps automatisch mit
+  if (AVAIL_SAVING) return;   // eine Schleife laeuft schon und holt neue Tipps mit
   AVAIL_SAVING = true;
-  while (AVAIL_PENDING.length) {
-    var n = AVAIL_PENDING.length;
-    try {
-      var r = await apiSave(PIN, DB, REV);
-      if (r.ok) {
-        REV = Number(r.rev || REV + 1); DB.rev = REV;
-        AVAIL_PENDING.splice(0, n);
-      } else if (r.error === "conflict" && r.state) {
-        DB = normalize(r.state); REV = Number(DB.rev || 0);
-        AVAIL_PENDING.forEach(function(op){ applyAvailOp(DB, op); });
-        UI.scroll = window.scrollY; render();
-      } else if (r.error === "pin") {
-        UNLOCKED = false; PINBUF = "";
-        try { if (TEAM) localStorage.removeItem("tp.pin." + TEAM.id); } catch(e){}
-        AVAIL_PENDING.length = 0;
-        render(); toast("Der PIN wurde geändert. Bitte neu anmelden.");
-        break;
-      } else {
-        toast(r.message || failText({error: r.error}));
-        scheduleAvailRetry();
-        break;
+  var paused = false;
+  try {
+    await enqueueWrite(async function(){
+      while (AVAIL_PENDING.length && UNLOCKED) {
+        var n = AVAIL_PENDING.length;
+        WRITE_ACTIVE = true;
+        try {
+          var r = await apiSave(PIN, DB, REV, "planning");
+          if (r.ok) {
+            REV = Number(r.rev || REV + 1); DB.rev = REV;
+            AVAIL_PENDING.splice(0, n);
+            persistPendingAvail();
+            if (!AVAIL_PENDING.length) { UI.scroll = window.scrollY; render(); }
+          } else if (r.error === "conflict" && r.state) {
+            DB = normalize(r.state); REV = Number(DB.rev || 0);
+            reapplyPending();
+            UI.scroll = window.scrollY; render();
+          } else if (r.error === "pin") {
+            UNLOCKED = false; PINBUF = "";
+            AVAIL_PENDING = []; persistPendingAvail();
+            try { if (TEAM) localStorage.removeItem("tp.pin." + TEAM.id); } catch(e){}
+            render(); toast("Der PIN wurde geändert. Bitte neu anmelden.");
+            break;
+          } else {
+            toast(r.message || failText({error: r.error}));
+            scheduleAvailRetry();
+            paused = true;
+            break;
+          }
+        } catch(err) {
+          toast(failText(err));
+          scheduleAvailRetry();
+          paused = true;
+          break;
+        } finally {
+          WRITE_ACTIVE = false;
+        }
       }
-    } catch(err) {
-      toast(failText(err));
-      scheduleAvailRetry();
-      break;
-    }
+    });
+  } finally {
+    AVAIL_SAVING = false;
+    // Nicht sofort erneut starten, wenn der letzte Versuch fehlgeschlagen ist:
+    // dafuer gibt es den verzögerten Wiederholungsversuch. Wohl aber, wenn
+    // waehrend des Abschlusses noch ein neuer Tipp dazugekommen ist.
+    if (!paused && AVAIL_PENDING.length && UNLOCKED) runAvailabilitySaveLoop();
   }
-  AVAIL_SAVING = false;
 }
 // Bei einem sonstigen Fehler (z. B. kurzer Netzausfall) bleiben die Tipps in
 // AVAIL_PENDING stehen und wuerden sonst nur beim naechsten Tippen erneut
@@ -891,6 +992,23 @@ function loadDraft(id){
 function saveDraft(id, d){ try { localStorage.setItem(draftKey(id), JSON.stringify(d)); } catch(e){} }
 function clearDraft(id){ try { localStorage.removeItem(draftKey(id)); } catch(e){} }
 
+function rosterFor(selectedIds){
+  var ids = selectedIds || [];
+  var seen = {}, out = [];
+  DB.players.forEach(function(p){
+    if ((p.active !== false || ids.indexOf(p.id) >= 0) && !seen[p.id]) { seen[p.id] = true; out.push(p); }
+  });
+  return out.sort(sortName);
+}
+function coachesFor(selectedIds){
+  var ids = selectedIds || [];
+  var seen = {}, out = [];
+  DB.coaches.forEach(function(c){
+    if ((c.active !== false || ids.indexOf(c.id) >= 0) && !seen[c.id]) { seen[c.id] = true; out.push(c); }
+  });
+  return out.sort(sortName);
+}
+function pausedMark(p){ return p && p.active === false ? ' <span class="muted small">pausiert</span>' : ""; }
 function activePlayers(){ return DB.players.filter(function(p){ return p.active !== false; }).sort(sortName); }
 function activeCoaches(){ return DB.coaches.filter(function(c){ return c.active !== false; }).sort(sortName); }
 
@@ -940,11 +1058,11 @@ function newCallupState(matchId){
   var addr = m.venueAddress || "";
   var v = venueFor(addr);
   // Vorschlagswerte, die beim Erstellen berechnet bzw. aus den Team-
-  // Einstellungen uebernommen werden, aber pro Aufgebot ueberschreibbar sind
-  // (wie Besammlungszeit/-ort) - ex.duration/ex.mitnehmen gewinnen, falls
-  // schon einmal individuell angepasst und gespeichert.
-  var duration = ex && ex.duration ? ex.duration : (timeRange(m) || "");
-  var mitnehmen = ex && ex.mitnehmen ? ex.mitnehmen : (DB.settings.callupNotes || CALLUP_NOTES_DEFAULT);
+  // Einstellungen uebernommen werden, aber pro Aufgebot ueberschreibbar sind.
+  // Ein einmal gespeicherter Wert gilt auch dann, wenn er leer ist. Der
+  // Vorschlag nur, solange das Feld noch nie gespeichert wurde.
+  var duration = savedOr(ex, "duration", timeRange(m) || "");
+  var mitnehmen = savedOr(ex, "mitnehmen", DB.settings.callupNotes || CALLUP_NOTES_DEFAULT);
   if (mode === "tournament") {
     var ttravel = ex ? (ex.travelMinutes || 0) : (v ? v.travelMinutes : 0);
     var tmeetPlace = ex ? ex.meetPlace : awayMeetPlace();
@@ -961,11 +1079,11 @@ function newCallupState(matchId){
       // erscheinen statt eines leeren Felds. Bei "match" bewusst NICHT so,
       // da "Bezeichnung" dort meist einen ganzen Satz enthaelt, der sich
       // nicht als "Gegner" eignet (siehe adminPlan()).
-      opponent: m.opponent || m.label || "",
+      opponent: matchOpponent(m),
       venueAddress: addr, travelMinutes: ttravel, meetPlace: tmeetPlace, meetTime: tmeetTime,
       duration: duration, mitnehmen: mitnehmen,
       squads: squads,
-      guests: ex ? ex.guests.map(function(g){ return {name: g.name, team: g.team}; }) : [],
+      guests: (ex && ex.guests) ? ex.guests.map(function(g){ return {name: g.name, team: g.team}; }) : [],
       rows: (ex && ex.rows && ex.rows.length) ? cloneInfoRows(ex.rows) : defaultInfoRows(),
       unlocked: {}
     };
@@ -981,7 +1099,7 @@ function newCallupState(matchId){
     // vor der eigenen Gegner-Erfassung angelegten Terminen steht der Gegner
     // oft nur als Teil der Bezeichnung ("Spiel gegen FC Muster c"). Besser
     // ein bearbeitbarer Vorschlag als ein leeres Feld.
-    opponent: m.opponent || m.label || "",
+    opponent: matchOpponent(m),
     homeAway: away ? "away" : "home",
     venueAddress: addr,
     travelMinutes: travel,
@@ -996,7 +1114,7 @@ function newCallupState(matchId){
     playerIds: (ex && ex.playerIds) ? ex.playerIds.slice() : [],
     keeperIds: existingKeeperIds(ex).slice(),
     captainId: (ex && ex.captainId) || "",
-    guests: ex ? ex.guests.map(function(g){ return {name: g.name, team: g.team}; }) : [],
+    guests: (ex && ex.guests) ? ex.guests.map(function(g){ return {name: g.name, team: g.team}; }) : [],
     rows: (ex && ex.rows && ex.rows.length) ? cloneInfoRows(ex.rows) : defaultInfoRows(),
     unlocked: {}
   };
@@ -1071,17 +1189,22 @@ function viewEvents(){
   }
 
   h += '<div class="eyebrow">Heute &amp; demnächst</div>';
-  h += upcoming.length ? '<div class="stack">' + upcoming.slice(0,8).map(function(o){ return evCard(o, null, today); }).join("") + "</div>"
+  h += upcoming.length ? '<div class="stack">' + upcoming.map(function(o){ return evCard(o, null, today); }).join("") + "</div>"
      : '<div class="card empty">Keine geplanten Termine in den nächsten drei Wochen.</div>';
 
   if (missing.length) {
     h += '<div class="eyebrow">Nachzutragen</div><div class="stack">'
-      + missing.slice(0,25).map(function(o){ return evCard(o, null, today); }).join("") + "</div>";
+      + missing.map(function(o){ return evCard(o, null, today); }).join("") + "</div>";
   }
 
   h += '<div class="eyebrow">Erfasst</div>';
-  h += done.length ? '<div class="stack">' + done.slice(0,60).map(function(r){ return evCard(r, r, today); }).join("") + "</div>"
+  var doneLimit = UI.doneLimit || 60;
+  var shownDone = done.slice(0, doneLimit);
+  h += shownDone.length ? '<div class="stack">' + shownDone.map(function(r){ return evCard(r, r, today); }).join("") + "</div>"
      : '<div class="card empty">Noch keine abgeschlossene Anwesenheitserfassung.</div>';
+  if (done.length > shownDone.length) {
+    h += '<div style="margin-top:10px"><button class="btn btn-block" data-act="moredone">Weitere anzeigen (' + (done.length - shownDone.length) + ")</button></div>";
+  }
 
   h += '<div style="margin-top:18px"><button class="btn btn-block" data-act="adhoc">+ Termin ausserhalb des Plans erfassen</button></div>';
   return h;
@@ -1093,9 +1216,8 @@ function evCard(o, rec, today){
   var cls = "ev" + (late ? " is-late" : "") + (o.date === today ? " is-today" : "");
   var right;
   if (rec) {
-    var n = 0, tot = 0;
-    for (var k in rec.entries) { tot++; if (rec.entries[k] === "present" || rec.entries[k] === "late") n++; }
-    right = '<span class="ev-quote">' + n + "/" + tot + "</span>";
+    var sc = sessionCounts(rec.entries);
+    right = '<span class="ev-quote">' + sc.here + "/" + sc.tot + "</span>";
   } else {
     right = loadDraft(o.id) ? '<span class="pill pill-open">Entwurf</span>' : ICON.chev;
   }
@@ -1143,12 +1265,12 @@ function viewRecord(){
     });
     players.sort(sortName);
   }
-  var coaches = activeCoaches();
+  var coaches = coachesFor(state.coachIds);
 
   var h = '<div class="card sheet-head">'
     + '<div class="row" style="gap:8px"><span class="pill ' + (occ.type === "match" ? "pill-match" : "pill-training") + '">' + typeLabel(occ.type) + "</span>"
     + (rec ? '<span class="pill pill-done">abgeschlossen</span>' : "")
-    + (draft && !rec ? '<span class="pill pill-open">Entwurf auf diesem Gerät</span>' : "") + "</div>"
+    + (draft ? '<span class="pill pill-open">Entwurf auf diesem Gerät</span>' : "") + "</div>"
     + '<div class="sheet-title">' + esc(occ.label || typeLabel(occ.type)) + "</div>"
     + '<div class="muted small">' + fmtDate(occ.date) + (occ.time ? " &middot; " + esc(timeRange(occ)) : "") + "</div>"
     + "</div>";
@@ -1160,7 +1282,7 @@ function viewRecord(){
     h += '<div class="wrap">' + coaches.map(function(c){
       var on = state.coachIds.indexOf(c.id) >= 0;
       return '<button class="coach" data-act="coach" data-id="' + c.id + '" aria-pressed="' + on + '">'
-        + (on ? ICON.check : "") + esc(fullName(c)) + (c.role ? ' <span class="muted small">' + esc(c.role) + "</span>" : "") + "</button>";
+        + (on ? ICON.check : "") + esc(fullName(c)) + pausedMark(c) + (c.role ? ' <span class="muted small">' + esc(c.role) + "</span>" : "") + "</button>";
     }).join("") + "</div>";
   }
 
@@ -1254,10 +1376,16 @@ function playerStats(recs){
 // Anwesenheit pro Trainer (fuer Spesenabrechnung): Anteil der erfassten
 // Termine im gewaehlten Zeitraum, bei denen der Trainer in coachIds steht.
 function coachStats(recs){
-  return activeCoaches().map(function(c){
-    var n = recs.filter(function(r){ return (r.coachIds || []).indexOf(c.id) >= 0; }).length;
+  var list = DB.coaches.filter(function(c){
+    if (c.active !== false) return true;
+    for (var i = 0; i < recs.length; i++) if ((recs[i].coachIds || []).indexOf(c.id) >= 0) return true;
+    return false;
+  });
+  return list.map(function(c){
+    var n = 0;
+    for (var i = 0; i < recs.length; i++) if ((recs[i].coachIds || []).indexOf(c.id) >= 0) n++;
     return {c: c, n: n, total: recs.length, quote: pct(n, recs.length)};
-  }).sort(function(a, b){ return b.n - a.n; });
+  }).sort(function(a, b){ return b.n - a.n || sortName(a.c, b.c); });
 }
 
 function viewStats(){
@@ -1311,7 +1439,7 @@ function viewStats(){
   if (cstats.length) {
     h += '<div class="eyebrow">Anwesenheit pro Trainer<span class="muted small" style="text-transform:none;letter-spacing:0;font-weight:400"> &middot; für Spesenabrechnung</span></div><div class="card">'
       + cstats.map(function(s){
-      return '<div class="item"><span class="grow"><b>' + esc(fullName(s.c)) + "</b>"
+      return '<div class="item"><span class="grow"><b>' + esc(fullName(s.c)) + "</b>" + pausedMark(s.c)
         + (s.c.role ? ' <span class="muted small">' + esc(s.c.role) + "</span>" : "") + "<br>"
         + '<span class="small muted">' + s.n + " von " + s.total + " Terminen</span></span>"
         + '<span class="disp tnum" style="font-size:18px">' + s.quote + "%</span></div>";
@@ -1322,11 +1450,10 @@ function viewStats(){
   if (recs.length) {
     h += '<div class="card tblwrap"><table class="grid"><thead><tr><th>Datum</th><th>Art</th><th>Trainer</th><th class="num">Anwesend</th><th class="num">Quote</th></tr></thead><tbody>'
       + recs.slice().reverse().map(function(r){
-          var here = 0, tot = 0;
-          for (var k in r.entries) { tot++; if (r.entries[k] === "present" || r.entries[k] === "late") here++; }
+          var sc = sessionCounts(r.entries);
           var cn = (r.coachIds || []).map(function(id){ var c = byId(DB.coaches, id); return c ? (c.first ? c.first.charAt(0) + ". " : "") + c.last : null; }).filter(Boolean).join(", ");
           return "<tr><td>" + fmtShort(r.date) + "</td><td>" + typeLabel(r.type) + "</td><td>" + (esc(cn) || "&ndash;")
-            + '</td><td class="num">' + here + "/" + tot + '</td><td class="num">' + pct(here, tot) + "%</td></tr>";
+            + '</td><td class="num">' + sc.here + "/" + sc.tot + '</td><td class="num">' + pct(sc.here, sc.tot) + "%</td></tr>";
         }).join("") + "</tbody></table></div>";
   } else {
     h += '<div class="card empty">Keine Termine im gewählten Zeitraum.</div>';
@@ -1365,10 +1492,9 @@ function exportCsv(){
   lines.push("");
   lines.push(["Datum","Wochentag","Uhrzeit","Art","Bezeichnung","Trainer","Anwesend","Erfasst","Notiz"].map(q).join(sep));
   recs.forEach(function(r){
-    var here = 0, tot = 0;
-    for (var k in r.entries) { tot++; if (r.entries[k] === "present" || r.entries[k] === "late") here++; }
+    var sc = sessionCounts(r.entries);
     var cn = (r.coachIds || []).map(function(id){ var c = byId(DB.coaches, id); return c ? fullName(c) : null; }).filter(Boolean).join(", ");
-    lines.push([r.date, DOW[dowOf(r.date)], r.time || "", typeLabel(r.type), r.label || "", cn, here, tot, r.note || ""].map(q).join(sep));
+    lines.push([r.date, DOW[dowOf(r.date)], r.time || "", typeLabel(r.type), r.label || "", cn, sc.here, sc.tot, r.note || ""].map(q).join(sep));
   });
   lines.push("");
   lines.push(["Matrix: Spieler x Termin (A=Anwesend, V=Verspätet, E=Entschuldigt, F=Fehlt, NA=Nicht im Aufgebot bei Wettkämpfen)"].map(q).join(sep));
@@ -1459,7 +1585,7 @@ function infoRowLabel(key, isT){
 function callupRowPreview(cw, m, key){
   var isT = cw.mode === "tournament";
   if (key === "notcalled") {
-    var ids = isT ? (cw.squads || []).reduce(function(a, sq){ return a.concat(sq.playerIds); }, []) : (cw.playerIds || []);
+    var ids = isT ? (cw.squads || []).reduce(function(a, sq){ return a.concat(sq.playerIds || []); }, []) : (cw.playerIds || []);
     if (!ids.length) return "(wird nach Auswahl der Spieler berechnet)";
     var names = activePlayers().filter(function(p){ return ids.indexOf(p.id) < 0; }).map(fullName);
     return names.length ? names.join(", ") : "–";
@@ -1553,7 +1679,10 @@ function adminPeople(kind){
 function field(id, label, input){ return '<label class="f" for="' + id + '">' + label + input + "</label>"; }
 
 function adminPlan(){
-  var h = '<div class="eyebrow">Wöchentliche Termine</div>'
+  var h = "";
+  var hol = holidayHorizonWarning();
+  if (hol) h += '<div class="banner" style="margin-bottom:12px">Die hinterlegten Schulferien enden am ' + esc(fmtShort(hol)) + '. Danach entstehen aus den wöchentlichen Serien auch in den Ferien Termine. Die Ferienliste in der App muss dann ergänzt werden.</div>';
+  h += '<div class="eyebrow">Wöchentliche Termine</div>'
     + '<p class="small muted" style="margin:-4px 0 10px">Jede Serie erzeugt automatisch alle Termine der Saison – Training oder Wettkampf.</p>';
   var rules = DB.rules.slice().sort(function(a,b){ return (a.weekday - b.weekday) || ((a.time||"") < (b.time||"") ? -1 : 1); });
   h += rules.length ? '<div class="card">' + rules.map(function(r){
@@ -1617,13 +1746,13 @@ function adminCallups(){
       var ha = m.homeAway ? ' <span class="pill ' + (m.homeAway === "home" ? "pill-home" : "pill-away") + '">' + (m.homeAway === "home" ? "Heim" : "Auswärts") + "</span>" : "";
       var status = "Noch kein Aufgebot";
       if (cu && cu.squads) {
-        var np = cu.squads.reduce(function(a, sq){ return a + sq.playerIds.length; }, 0);
-        var nc = cu.squads.reduce(function(a, sq){ return a + sq.coachIds.length; }, 0);
+        var np = cu.squads.reduce(function(a, sq){ return a + (sq.playerIds || []).length; }, 0);
+        var nc = cu.squads.reduce(function(a, sq){ return a + (sq.coachIds || []).length; }, 0);
         status = "Aufgebot erstellt · " + cu.squads.length + " Team" + (cu.squads.length === 1 ? "" : "s") + ", " + np + " Spieler, " + nc + " Trainer";
       } else if (cu) {
-        status = "Aufgebot erstellt · " + cu.playerIds.length + " Spieler, " + cu.coachIds.length + " Trainer";
+        status = "Aufgebot erstellt · " + (cu.playerIds || []).length + " Spieler, " + (cu.coachIds || []).length + " Trainer";
       }
-      return '<button class="item" data-act="callupview" data-id="' + m.id + '"><span class="grow"><b>' + fmtShort(m.date) + "</b> · " + esc(m.opponent || m.label || "Wettkampf") + ha
+      return '<button class="item" data-act="callupview" data-id="' + m.id + '"><span class="grow"><b>' + fmtShort(m.date) + "</b> · " + esc(matchOpponent(m) || "Wettkampf") + ha
         + '<br><span class="small muted">' + esc(status) + '</span></span><span class="ev-side">' + ICON.chev + "</span></button>";
     }).join("") + "</div>"
     : '<div class="card empty">Noch keine Wettkampftage hinterlegt. Zuerst unter «Termine» anlegen. <button class="btn btn-sm" data-act="atab" data-v="plan" style="margin-top:10px">Zu Termine</button></div>';
@@ -1639,7 +1768,7 @@ function adminSettings(){
     + field("t-start", "Saisonstart", '<input type="date" id="t-start" value="' + esc(s.seasonStart) + '">')
     + field("t-end", "Saisonende", '<input type="date" id="t-end" value="' + esc(s.seasonEnd) + '">')
     + '</div><div class="formgrid" style="margin-top:10px">'
-    + field("t-pin", "App-PIN", '<input type="text" inputmode="numeric" id="t-pin" value="' + esc(s.pin) + '" placeholder="leer = kein Schutz">')
+    + field("t-pin", "App-PIN", '<input type="text" inputmode="numeric" id="t-pin" value="' + esc(s.pin) + '" placeholder="mindestens 4 Ziffern">')
     + field("t-apin", "Admin-PIN", '<input type="text" inputmode="numeric" id="t-apin" value="' + esc(s.adminPin) + '" placeholder="leer = kein Schutz">')
     + '</div><button class="btn btn-primary btn-block" style="margin-top:10px" data-act="savesettings">Speichern</button></div>'
     + '<div class="eyebrow">Aufgebot</div><div class="card" style="padding:13px"><div class="formgrid">'
@@ -1718,12 +1847,18 @@ function callupStep1(cw){
 }
 
 function callupStepSquads(cw){
-  var players = activePlayers();
-  var coaches = activeCoaches();
+  cw.guests = cw.guests || [];
+  var selectedPlayers = [], selectedCoaches = [];
+  cw.squads.forEach(function(sq){
+    (sq.playerIds || []).forEach(function(id){ selectedPlayers.push(id); });
+    (sq.coachIds || []).forEach(function(id){ selectedCoaches.push(id); });
+  });
+  var players = rosterFor(selectedPlayers);
+  var coaches = coachesFor(selectedCoaches);
   var h = "";
   cw.squads.forEach(function(sq, i){
     var usedElsewhere = {};
-    cw.squads.forEach(function(other, j){ if (j !== i) other.playerIds.forEach(function(pid){ usedElsewhere[pid] = true; }); });
+    cw.squads.forEach(function(other, j){ if (j !== i) (other.playerIds || []).forEach(function(pid){ usedElsewhere[pid] = true; }); });
     h += '<div class="eyebrow">Team ' + (i + 1) + "</div>"
       + '<div class="card" style="padding:13px"><div class="formgrid">'
       + lockedField(cw, "sqname-" + i, "Name Team " + (i + 1), sq.name,
@@ -1732,19 +1867,19 @@ function callupStepSquads(cw){
       + "</div></div>";
     h += '<p class="small muted" style="margin:10px 0 8px">Trainer &ndash; mindestens 1, maximal 2</p>';
     h += coaches.length ? '<div class="wrap">' + coaches.map(function(c){
-        var on = sq.coachIds.indexOf(c.id) >= 0;
-        return '<button class="coach" data-act="cwsquadcoach" data-sq="' + i + '" data-id="' + c.id + '" aria-pressed="' + on + '">' + (on ? ICON.check : "") + esc(fullName(c)) + "</button>";
+        var on = (sq.coachIds || []).indexOf(c.id) >= 0;
+        return '<button class="coach" data-act="cwsquadcoach" data-sq="' + i + '" data-id="' + c.id + '" aria-pressed="' + on + '">' + (on ? ICON.check : "") + esc(fullName(c)) + pausedMark(c) + "</button>";
       }).join("") + "</div>"
       : '<div class="card empty">Noch keine Trainer erfasst. <button class="btn btn-sm" data-act="go" data-view="admin" data-tab="coaches" style="margin-top:10px">Trainer anlegen</button></div>';
     h += '<p class="small muted" style="margin:14px 0 8px">Spieler &ndash; antippen wählt aus/ab, <b>TW</b> markiert Torhüter (auch mehrere möglich), <b>C</b> markiert den Captain</p>';
     h += players.length ? '<div class="card">' + players.map(function(p){
         var blocked = usedElsewhere[p.id];
-        var on = sq.playerIds.indexOf(p.id) >= 0;
+        var on = (sq.playerIds || []).indexOf(p.id) >= 0;
         var gk = isKeeper(sq, p.id);
         var cap = sq.captainId === p.id;
         return '<div class="item cwitem' + (on ? " sel" : "") + '">'
           + '<button class="grow" data-act="cwsquadplayer" data-sq="' + i + '" data-id="' + p.id + '" aria-pressed="' + on + '"' + (blocked ? " disabled" : "") + ' style="text-align:left;background:none;border:0;padding:0;font:inherit;color:inherit;cursor:pointer">'
-          + (on ? ICON.check : "") + "<b>" + esc(p.first) + "</b> " + esc(p.last) + (blocked ? ' <span class="muted small">bereits in anderem Team</span>' : "") + "</button>"
+          + (on ? ICON.check : "") + "<b>" + esc(p.first) + "</b> " + esc(p.last) + pausedMark(p) + (blocked ? ' <span class="muted small">bereits in anderem Team</span>' : "") + "</button>"
           + '<button class="tw" data-act="cwsquadgk" data-sq="' + i + '" data-id="' + p.id + '" aria-pressed="' + gk + '"' + (on ? "" : " disabled") + '>TW</button>'
           + '<button class="tw cap" data-act="cwsquadcaptain" data-sq="' + i + '" data-id="' + p.id + '" aria-pressed="' + cap + '"' + (on ? "" : " disabled") + '>C</button></div>';
       }).join("") + "</div>"
@@ -1772,11 +1907,12 @@ function callupStepSquads(cw){
 }
 
 function callupStep2(cw){
-  var coaches = activeCoaches();
+  cw.coachIds = cw.coachIds || [];
+  var coaches = coachesFor(cw.coachIds);
   var h = '<p class="small muted" style="margin:0 0 10px">Mindestens 1, maximal 2 Trainer &ndash; antippen zum An-/Abwählen.</p>';
   h += coaches.length ? '<div class="wrap">' + coaches.map(function(c){
       var on = cw.coachIds.indexOf(c.id) >= 0;
-      return '<button class="coach" data-act="cwcoach" data-id="' + c.id + '" aria-pressed="' + on + '">' + (on ? ICON.check : "") + esc(fullName(c)) + "</button>";
+      return '<button class="coach" data-act="cwcoach" data-id="' + c.id + '" aria-pressed="' + on + '">' + (on ? ICON.check : "") + esc(fullName(c)) + pausedMark(c) + "</button>";
     }).join("") + "</div>"
     : '<div class="card empty">Noch keine Trainer erfasst. <button class="btn btn-sm" data-act="go" data-view="admin" data-tab="coaches" style="margin-top:10px">Trainer anlegen</button></div>';
   h += '<div class="wrap" style="margin-top:16px;justify-content:space-between">'
@@ -1786,7 +1922,9 @@ function callupStep2(cw){
 }
 
 function callupStep3(cw){
-  var players = activePlayers();
+  cw.playerIds = cw.playerIds || [];
+  cw.guests = cw.guests || [];
+  var players = rosterFor(cw.playerIds);
   var h = '<p class="small muted" style="margin:0 0 4px">Antippen wählt aus/ab &middot; <b>TW</b> markiert Torhüter für dieses Aufgebot (auch mehrere möglich) &middot; <b>C</b> markiert den Captain.</p>'
     + '<div class="eyebrow">Ausgewählt: ' + cw.playerIds.length + ' / 14</div>';
   h += players.length ? '<div class="card">' + players.map(function(p){
@@ -1795,7 +1933,7 @@ function callupStep3(cw){
       var cap = cw.captainId === p.id;
       return '<div class="item cwitem' + (on ? " sel" : "") + '">'
         + '<button class="grow" data-act="cwplayer" data-id="' + p.id + '" aria-pressed="' + on + '" style="text-align:left;background:none;border:0;padding:0;font:inherit;color:inherit;cursor:pointer">'
-        + (on ? ICON.check : "") + "<b>" + esc(p.first) + "</b> " + esc(p.last) + "</button>"
+        + (on ? ICON.check : "") + "<b>" + esc(p.first) + "</b> " + esc(p.last) + pausedMark(p) + "</button>"
         + '<button class="tw" data-act="cwgk" data-id="' + p.id + '" aria-pressed="' + gk + '"' + (on ? "" : " disabled") + '>TW</button>'
         + '<button class="tw cap" data-act="cwcaptain" data-id="' + p.id + '" aria-pressed="' + cap + '"' + (on ? "" : " disabled") + '>C</button></div>';
     }).join("") + "</div>"
@@ -1826,17 +1964,15 @@ function viewCallupPrint(){
   if (!cu) return '<div class="card empty">Für diesen Wettkampftag besteht noch kein Aufgebot. <button class="btn btn-sm" style="margin-top:10px" data-act="callupopen" data-id="' + m.id + '">Aufgebot erstellen</button></div>';
   var isT = !!cu.squads;
 
-  var calledUpIds = isT ? cu.squads.reduce(function(a, sq){ return a.concat(sq.playerIds); }, []) : cu.playerIds.slice();
+  var calledUpIds = isT ? cu.squads.reduce(function(a, sq){ return a.concat(sq.playerIds || []); }, []) : (cu.playerIds || []).slice();
   var notCalledUp = activePlayers().filter(function(p){ return calledUpIds.indexOf(p.id) < 0; }).map(fullName);
 
   var addr = m.venueAddress || "";
   var mapsUrl = addr ? "https://maps.google.com/?q=" + encodeURIComponent(addr) : "";
-  // cu.duration/cu.mitnehmen erst seit der editierbaren Version dieser Felder
-  // gespeichert - bei aelteren Aufgeboten (Feld war noch nicht gesetzt) auf
-  // den frueher fest berechneten/aus den Team-Einstellungen stammenden Wert
-  // zurueckfallen.
-  var duration = cu.duration || timeRange(m) || "";
-  var notes = cu.mitnehmen || DB.settings.callupNotes || CALLUP_NOTES_DEFAULT;
+  // Gespeicherter Leertext bleibt leer. Der Vorschlag gilt nur, wenn das Feld
+  // in diesem Aufgebot noch nie gesetzt wurde.
+  var duration = savedOr(cu, "duration", timeRange(m) || "");
+  var notes = savedOr(cu, "mitnehmen", DB.settings.callupNotes || CALLUP_NOTES_DEFAULT);
   var cancelHint = DB.settings.callupCancelHint || CALLUP_CANCEL_DEFAULT;
   var logo = (TEAM && TEAM.logo) ? '<div class="ca-logo"><img src="' + TEAM.logo + '" alt="' + esc(DB.settings.team || TITLE) + '"></div>' : "";
   var teamName = DB.settings.team || TITLE;
@@ -1848,30 +1984,31 @@ function viewCallupPrint(){
 
   h += '<div class="capaper"><div class="ca-head"><div>';
   if (isT) {
-    h += "<h2>Spielaufgebot für " + esc(m.opponent || "das Turnier") + "</h2>";
+    var opp = matchOpponent(m);
+    h += "<h2>Spielaufgebot für " + esc(opp || "das Turnier") + "</h2>";
   } else {
     var away = m.homeAway === "away";
     h += "<h2>Spielaufgebot für " + (away ? "Auswärtsspiel" : "Heimspiel") + " am " + fmtShort(m.date) + "</h2>"
-      + '<div><span class="ca-lbl">Gegner:</span> ' + esc(m.opponent || "–") + "</div>";
+      + '<div><span class="ca-lbl">Gegner:</span> ' + esc(matchOpponent(m) || "–") + "</div>";
   }
   h += "</div>" + logo + "</div>";
 
   if (isT) {
     cu.squads.forEach(function(sq, i){
-      var names = sq.playerIds.map(function(pid){
+      var names = (sq.playerIds || []).map(function(pid){
         var p = byId(DB.players, pid); if (!p) return null;
         return fullName(p) + (isKeeper(sq, pid) ? " (TW)" : "") + (sq.captainId === pid ? " (Captain)" : "");
       }).filter(Boolean);
-      if (i === 0) cu.guests.forEach(function(g){ names.push(g.name + (g.team ? " (" + g.team + ")" : "")); });
+      if (i === 0) (cu.guests || []).forEach(function(g){ names.push(g.name + (g.team ? " (" + g.team + ")" : "")); });
       h += '<div class="ca-lbl" style="margin-bottom:6px">' + esc(teamName) + " " + esc(sq.name || "Team " + (i + 1)) + ":</div>"
         + "<ul>" + names.map(function(n){ return "<li>" + esc(n) + "</li>"; }).join("") + "</ul>";
     });
   } else {
-    var names = cu.playerIds.map(function(pid){
+    var names = (cu.playerIds || []).map(function(pid){
       var p = byId(DB.players, pid); if (!p) return null;
       return fullName(p) + (isKeeper(cu, pid) ? " (TW)" : "") + (cu.captainId === pid ? " (Captain)" : "");
     }).filter(Boolean);
-    cu.guests.forEach(function(g){ names.push(g.name + (g.team ? " (" + g.team + ")" : "")); });
+    (cu.guests || []).forEach(function(g){ names.push(g.name + (g.team ? " (" + g.team + ")" : "")); });
     h += '<div class="ca-lbl" style="margin-bottom:6px">Aufgebot für:</div><ol>' + names.map(function(n){ return "<li>" + esc(n) + "</li>"; }).join("") + "</ol>";
   }
 
@@ -1892,11 +2029,11 @@ function viewCallupPrint(){
   var coachLine;
   if (isT) {
     coachLine = cu.squads.map(function(sq, i){
-      var n = sq.coachIds.map(function(cid){ var c = byId(DB.coaches, cid); return c ? fullName(c) : null; }).filter(Boolean).join(" und ");
+      var n = (sq.coachIds || []).map(function(cid){ var c = byId(DB.coaches, cid); return c ? fullName(c) : null; }).filter(Boolean).join(" und ");
       return esc(sq.name || "Team " + (i + 1)) + ": " + esc(n || "–");
     }).join(" / ");
   } else {
-    coachLine = esc(cu.coachIds.map(function(cid){ var c = byId(DB.coaches, cid); return c ? fullName(c) : null; }).filter(Boolean).join(" und ") || "–");
+    coachLine = esc((cu.coachIds || []).map(function(cid){ var c = byId(DB.coaches, cid); return c ? fullName(c) : null; }).filter(Boolean).join(" und ") || "–");
   }
 
   h += '<div class="ca-foot"><span class="ca-hi">Abmeldungen/Verspätungen:</span> ' + esc(cancelHint) + "</div>"
@@ -2146,7 +2283,7 @@ function viewReport(){
       + '<div class="tblwrap"><table class="grid" style="width:auto;min-width:min(100%,420px)"><thead><tr><th>Vorname</th><th>Nachname</th>'
       + '<th class="num">Einsätze</th><th class="num">Termine</th><th class="num">Quote</th></tr></thead><tbody>'
       + cstats.map(function(s){
-          return "<tr><td>" + esc(s.c.first) + "</td><td>" + esc(s.c.last) + '</td><td class="num">'
+          return "<tr><td>" + esc(s.c.first) + "</td><td>" + esc(s.c.last) + (s.c.active === false ? " (pausiert)" : "") + '</td><td class="num">'
             + s.n + '</td><td class="num">' + s.total + '</td><td class="num"><b>' + s.quote + "%</b></td></tr>";
         }).join("") + "</tbody></table></div>";
   }
@@ -2154,12 +2291,11 @@ function viewReport(){
   h += "<h2>Termine</h2>"
     + '<div class="tblwrap"><table class="grid"><thead><tr><th>Datum</th><th>Tag</th><th>Zeit</th><th>Art</th><th>Bezeichnung</th><th>Trainer</th><th class="num">Anwesend</th><th class="num">Quote</th></tr></thead><tbody>'
     + recs.map(function(r){
-        var here = 0, tot = 0;
-        for (var k in r.entries) { tot++; if (r.entries[k] === "present" || r.entries[k] === "late") here++; }
+        var sc = sessionCounts(r.entries);
         var cn = (r.coachIds || []).map(function(id){ var c = byId(DB.coaches, id); return c ? fullName(c) : null; }).filter(Boolean).join(", ");
         return "<tr><td>" + fmtShort(r.date) + "</td><td>" + DOW_S[dowOf(r.date)] + "</td><td>" + esc(timeRange(r) || "–")
           + "</td><td>" + typeLabel(r.type) + "</td><td>" + esc(r.label || "") + "</td><td>" + (esc(cn) || "–")
-          + '</td><td class="num">' + here + " / " + tot + '</td><td class="num">' + pct(here, tot) + "%</td></tr>";
+          + '</td><td class="num">' + sc.here + " / " + sc.tot + '</td><td class="num">' + pct(sc.here, sc.tot) + "%</td></tr>";
       }).join("") + "</tbody></table></div>";
 
   if (recs.length && recs.length <= 40) {
@@ -2233,12 +2369,15 @@ function render(){
   var brand = TEAMS.length > 1
     ? '<button class="brand brand-btn" data-act="lock" aria-label="Team wechseln"><b>' + brandName + "</b><span>" + esc(sub) + "</span></button>"
     : '<span class="brand"><b>' + brandName + "</b><span>" + esc(sub) + "</span></span>";
+  var pendingNote = (UNLOCKED && AVAIL_PENDING.length)
+    ? '<div class="banner" data-pending-avail style="margin-bottom:12px">Zu-/Absagen sind noch nicht gespeichert. Die App versucht es von selbst erneut.</div>'
+    : "";
   el("root").innerHTML =
       '<header class="topbar"><div class="topbar-in">'
     + (back ? '<button class="back" data-act="back">' + ICON.arrow + "Zurück</button>" : "")
     + brand
     + "</div></header>"
-    + '<main class="app">' + body + "</main>" + nav;
+    + '<main class="app">' + pendingNote + body + "</main>" + nav;
   window.scrollTo(0, UI.scroll || 0);
   UI.scroll = 0;
   try { sessionStorage.setItem("tp.ui", JSON.stringify({view:UI.view, occ:UI.occ, planOcc:UI.planOcc, myCoach:UI.myCoach, statType:UI.statType, statRange:UI.statRange, statSort:UI.statSort, adminTab:UI.adminTab, callupPrintId:UI.callupPrintId})); } catch(e){}
@@ -2368,6 +2507,13 @@ function updateSheet(){
   var tot = document.querySelectorAll(".plist li").length;
   var box = el("tally"); if (box) box.innerHTML = tallyHtml(st, tot);
   saveDraft(UI.occ, st);
+  var head = document.querySelector(".sheet-head .row");
+  if (head && !head.querySelector(".pill-open")) {
+    var pill = document.createElement("span");
+    pill.className = "pill pill-open";
+    pill.textContent = "Entwurf auf diesem Gerät";
+    head.appendChild(pill);
+  }
 }
 
 /* Aufgebot-PDF: muss immer auf eine einzelne DIN-A4-Seite passen. Statt den
@@ -2442,8 +2588,9 @@ var ACT = {
       if (tid) { localStorage.removeItem("tp.pin." + tid); sessionStorage.removeItem("tp.admin." + tid); }
       setStoredTeam("");
     } catch(e){}
+    AVAIL_PENDING = [];
     PINBUF = ""; PIN = ""; DB = null; TEAM = null; UNLOCKED = false; ADMIN_OK = false;
-    UI = {view:"events", occ:null, planOcc:null, statType:"all", statRange:"season", statSort:"quote", adminTab:"players"};
+    UI = {view:"events", occ:null, planOcc:null, statType:"all", statRange:"season", statSort:"quote", adminTab:"players", doneLimit:60};
     render();
   },
   chooseteam: function(t){
@@ -2457,8 +2604,9 @@ var ACT = {
     if (p) boot(p);
   },
   changeteam: function(){
+    AVAIL_PENDING = [];
     PINBUF = ""; FAIL = null; DB = null; PIN = ""; UNLOCKED = false; TEAM = null;
-    UI = {view:"events", occ:null, planOcc:null, statType:"all", statRange:"season", statSort:"quote", adminTab:"players"};
+    UI = {view:"events", occ:null, planOcc:null, statType:"all", statRange:"season", statSort:"quote", adminTab:"players", doneLimit:60};
     render();
   },
   open: function(t){ UI.occ = t.getAttribute("data-occ"); UI.confirm = null; go("record"); },
@@ -2557,6 +2705,7 @@ var ACT = {
   srange: function(t){ UI.statRange = t.getAttribute("data-v"); render(); },
   ssort: function(){ UI.statSort = UI.statSort === "quote" ? "name" : "quote"; render(); },
   export: function(){ exportCsv(); },
+  moredone: function(){ UI.doneLimit = (UI.doneLimit || 60) + 60; UI.scroll = window.scrollY; render(); },
   atab: function(t){ UI.adminTab = t.getAttribute("data-v"); UI.edit = null; UI.confirm = null; render(); },
   ask: function(t){ UI.scroll = window.scrollY; UI.confirm = t.getAttribute("data-id") || null; render(); },
   canceledit: function(){ UI.edit = null; render(); },
@@ -2575,7 +2724,7 @@ var ACT = {
     commit(function(db){
       var p = byId(kind === "coaches" ? db.coaches : db.players, id);
       if (p) { p.first = first; p.last = last; if (kind === "coaches") p.role = role; }
-    }, "Gespeichert.").then(function(ok){ if (ok) UI.edit = null; });
+    }, "Gespeichert.").then(function(ok){ if (ok) { UI.edit = null; render(); } });
   },
   toggleperson: function(t){
     var kind = t.getAttribute("data-kind"), id = t.getAttribute("data-id");
@@ -2916,6 +3065,8 @@ var ACT = {
   savesettings: function(){
     var team = val("t-team"), season = val("t-season"), s = val("t-start"), e = val("t-end");
     var pin = val("t-pin").replace(/\D/g, ""), apin = val("t-apin").replace(/\D/g, "");
+    var pinErr = appPinError(pin, (DB.settings && DB.settings.pin) || "");
+    if (pinErr) { toast(pinErr); return; }
     var cnotes = val("t-cnotes"), ccancel = val("t-ccancel");
     var cmode = val("t-cmode") === "tournament" ? "tournament" : "match", meetplace = val("t-meetplace");
     commit(function(db){ db.settings = {team: team, season: season, seasonStart: s, seasonEnd: e, pin: pin, adminPin: apin, callupNotes: cnotes, callupCancelHint: ccancel, callupMode: cmode, awayMeetPlace: meetplace}; },
@@ -2925,6 +3076,7 @@ var ACT = {
           try {
             setStoredPin(TEAM.id, pin);
             if (apin) sessionStorage.setItem("tp.admin." + TEAM.id, apin);
+            else sessionStorage.removeItem("tp.admin." + TEAM.id);
           } catch(e2){}
         }
       });
@@ -2944,8 +3096,15 @@ document.addEventListener("keydown", function(ev){
   else if (ev.key === "Backspace") { ev.preventDefault(); PINBUF = PINBUF.slice(0, -1); render(); }
   else if (ev.key === "Enter") { ev.preventDefault(); if (PINBUF) submitPin(UNLOCKED ? "admin" : "app"); }
 });
-document.addEventListener("visibilitychange", function(){ if (!document.hidden) refresh(); });
-window.addEventListener("online", function(){ if (FAIL && TEAM) boot(PIN || storedPin(TEAM.id)); });
+document.addEventListener("visibilitychange", function(){
+  if (document.hidden) return;
+  if (AVAIL_PENDING.length) runAvailabilitySaveLoop();
+  refresh();
+});
+window.addEventListener("online", function(){
+  if (AVAIL_PENDING.length) runAvailabilitySaveLoop();
+  if (FAIL && TEAM) boot(PIN || storedPin(TEAM.id));
+});
 
 // Team bestimmen: zuletzt gewaehltes Team, oder automatisch, wenn nur eines
 // konfiguriert ist. Danach, falls fuer dieses Team schon ein PIN gemerkt ist,
@@ -2957,6 +3116,45 @@ window.addEventListener("online", function(){ if (FAIL && TEAM) boot(PIN || stor
 })();
 render();
 if (TEAM) { var initialPin = storedPin(TEAM.id); if (initialPin) boot(initialPin); }
+
+window.__TP_TEST = {
+  sessionCounts: sessionCounts,
+  sortName: sortName,
+  matchOpponent: matchOpponent,
+  savedOr: savedOr,
+  appPinError: appPinError,
+  holidayHorizonWarning: holidayHorizonWarning,
+  rosterFor: rosterFor,
+  coachesFor: coachesFor,
+  coachStats: coachStats,
+  newCallupState: newCallupState,
+  viewEvents: viewEvents,
+  viewRecord: viewRecord,
+  viewStats: viewStats,
+  refresh: refresh,
+  commit: commit,
+  commitAvailability: commitAvailability,
+  boot: boot,
+  render: render,
+  loadDB: function(d){
+    DB = normalize(d);
+    REV = Number(DB.rev || 0);
+    UNLOCKED = true;
+    if (!TEAM) TEAM = (TEAMS && TEAMS[0]) || {id:"t", name:"Test", apiUrl:"https://example.test/exec"};
+  },
+  get: function(){ return {rev: REV, pending: AVAIL_PENDING.slice(), busy: BUSY, unlocked: UNLOCKED, pin: PIN, db: DB, ui: UI}; },
+  setRev: function(n){ REV = n; if (DB) DB.rev = n; },
+  setUI: function(patch){ for (var k in (patch || {})) UI[k] = patch[k]; },
+  setPin: function(p){ PIN = p; },
+  setAdmin: function(on){ ADMIN_OK = !!on; },
+  setPending: function(ops){
+    AVAIL_PENDING = (ops || []).slice();
+    persistPendingAvail();
+    if (DB) reapplyPending();
+  },
+  act: function(name, node){ return ACT[name](node); },
+  html: function(){ return document.getElementById("root").innerHTML; }
+};
 
 })();
 </script>

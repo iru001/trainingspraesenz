@@ -83,8 +83,15 @@ Der Admin-PIN ist eine reine Bequemlichkeitssperre gegen versehentliche
   Planung (`commitAvailability`).
 - **Persistenz**: die „Datenbank" ist eine Google-Tabelle. Der maßgebliche
   Zustand liegt als **ein** JSON-String im Blatt `_daten`, über mehrere Zellen
-  verteilt (max. `CHUNK` Zeichen pro Zelle). Die übrigen Blätter sind ein
-  **Abbild** und werden bei jeder Speicherung überschrieben.
+  verteilt (max. `CHUNK` Zeichen pro Zelle). `writeState()` schreibt zuerst
+  nach `_daten_neu` und benennt erst danach um; schlägt das Schreiben fehl,
+  bleibt der bisherige Stand. Fehlt `_daten`, liest `readState()` `_daten_neu`.
+  Die übrigen Blätter sind ein **Abbild**. `renderLatest()` liest den jüngsten
+  Stand unter kurzer Sperre und zeichnet ihn seriell (Dokument-Sperre). Eine
+  Zu-/Absage schickt `render: "planning"` und erneuert nur `Trainerplanung`;
+  Anwesenheit und Admin schicken `render: "all"`. Leere `Aufgebote`- und
+  `Trainerplanung`-Blätter werden entfernt. Namen sortieren mit
+  `localeCompare(..., "de")`.
 
 **Bewusst NICHT vorhanden:** Benutzerkonten, Sessions/Tokens, echte Datenbank,
 Server-Framework, Realtime/WebSockets, Push, mehrsprachige UI. Mandantenfähigkeit
@@ -271,9 +278,10 @@ und Server hin- und herwandert und was in `_daten` liegt.
   eigener Punkt unten. Ein Spieler ohne Eintrag zählt für diesen Termin
   **nicht** in die Statistik.
 - **Quote** = (`present` + `late`) / Anzahl Termine mit Eintrag (`"na"` zählt
-  dabei wie "kein Eintrag" NICHT mit, siehe unten). Zentral in `playerStats()`;
-  wer die Definition ändert, muss Backend-`renderSheets` und den Bericht
-  anpassen.
+  dabei wie "kein Eintrag" NICHT mit). Das gilt für die Spielerquote
+  (`playerStats()`, Blatt `Auswertung`) und für die Quote eines einzelnen
+  Termins (Karte, Auswertung, Bericht, CSV, Blatt `Termine`) über
+  `sessionCounts()`. `"na"` erhöht dort weder Zähler noch Nenner.
 - **`"na"` (Nicht im Aufgebot)**: nur bei `type === "match"` wählbar (Button
   erscheint in `viewRecord()` nur dort, `.seg.seg-5` statt `.seg` für die
   fünfte Spalte). Bewusst **kein** Eintrag in `STATUS`/`SK` – dort würde er
@@ -485,9 +493,11 @@ Freitext raten; die muss einmalig in "Termine" nachgetragen werden.
   Berechnung. `newCallupState()` berechnet den Vorschlag einmalig
   (`timeRange(m)` bzw. `DB.settings.callupNotes || CALLUP_NOTES_DEFAULT`)
   und übernimmt einen schon individuell gespeicherten Wert
-  (`ex.duration`/`ex.mitnehmen`), falls vorhanden – analog zur Fahrzeit.
-  `viewCallupPrint()` zeigt `cu.duration`/`cu.mitnehmen`, fällt bei älteren
-  Aufgeboten ohne dieses Feld auf den früher fest berechneten Wert zurück.
+  (`"duration" in ex` / `"mitnehmen" in ex`), auch wenn der Text leer ist.
+  Fehlt das Feld (älteres Aufgebot), gilt der Vorschlag. Dasselbe in
+  `viewCallupPrint()` über `savedOr()`. Der Gegner fällt nur auf die
+  Terminbezeichnung zurück, wenn am Einzeltermin kein Feld `opponent` steht;
+  ein gespeicherter leerer Gegner bleibt leer (`matchOpponent()`).
   Betrifft nur den Ausdruck/das Aufgebot selbst – das Apps-Script-Backend
   rendert diese beiden Felder nicht in der Aufgebote-Übersicht im Sheet,
   daher hier ausnahmsweise KEIN Redeploy nötig.
@@ -614,6 +624,7 @@ Body ist JSON.
 | `busy` | Sperre (LockService) nicht bekommen | „in ein paar Sekunden nochmals" |
 | `too_large` | Body > `MAX_BODY` oder Limits überschritten | Meldung |
 | `bad_state` | `state` strukturell ungültig | „Seite neu laden" |
+| `bad_pin` | neuer App-PIN ist keine 4–16 Ziffern | Hinweis, alter PIN bleibt |
 | `server` | unerwarteter Fehler (mit `message`) | generische Meldung |
 
 Frontendseitig kommen noch `noconfig` (apiUrl fehlt), `http` (HTTP-Status ≠ 200),
@@ -653,39 +664,25 @@ zentralen Delegat-Handler auf `data-act`-Attribute (`ACT`-Objekt).
 
 1. `boot(pin)` → `apiLoad` → bei Erfolg `DB`/`REV` setzen, `UNLOCKED=true`,
    `render()`. Der PIN wird in `localStorage` (`tp.pin`) gemerkt.
-2. Benutzeraktion → `commit(mutate, msg, nextUI)`: klont `DB`, wendet `mutate`
-   an, `render()` (optimistisch), `apiSave`. Bei `conflict`/Fehler Rollback.
-3. `refresh()` beim Zurückkehren in die App (visibilitychange) lädt neu, wenn
-   sich `rev` geändert hat.
-4. `commitAvailability(occId, coachId, status, reason)` ist eine bewusste
-   Ausnahme neben `commit()`, aus zwei Gründen NICHT blockierend:
-   - Anders als `commit()` wartet sie **nie** auf eine laufende Speicherung
-     (kein `if (BUSY) return`). Jeder Tipp wendet die Änderung sofort lokal
-     an (`applyAvailOp`) und rendert – das eigentliche Speichern läuft über
-     eine Warteschlange (`AVAIL_PENDING`/`AVAIL_SAVING`/
-     `runAvailabilitySaveLoop()`) im Hintergrund. Schnell aufeinanderfolgende
-     Tipps (z. B. beim zügigen Durchgehen vieler Termine in der Planung)
-     landen dadurch automatisch gebündelt in weniger Serveraufrufen, statt
-     dass jeder einzelne Tipp auf die volle Serverantwort warten müsste.
-   - Bei `conflict` werden alle noch offenen (`AVAIL_PENDING`) Änderungen auf
-     dem frischen Server-Stand erneut angewendet, bevor weitergespeichert
-     wird – die Schleife läuft weiter, bis die Warteschlange leer ist.
-   Das ist hier sicher, weil jede Zu-/Absage nur eine einzelne, von allem
-   anderen unabhängige Stelle im Zustand verändert (anders als z. B. ein
-   Freitext-Kommentar, wo blindes Wiederholen riskant wäre, weil zwei
-   Personen dieselbe Stelle unterschiedlich geändert haben könnten – deshalb
-   bleibt `commit()` bewusst blockierend und ohne Auto-Retry). Neue
-   Funktionen mit demselben "viele kleine, unabhängige Klicks, zügig
-   nacheinander"-Charakter wie die Trainer-Planung sollten
-   `commitAvailability()`/`runAvailabilitySaveLoop()` als Vorlage nehmen
-   statt `commit()` anzufassen.
-   - Bei einem sonstigen Fehler (z. B. kurzer Netzausfall, nicht `conflict`/
-     `pin`) bleiben nicht gespeicherte Tipps in `AVAIL_PENDING` stehen und
-     würden ohne einen weiteren Tipp sonst unbemerkt dauerhaft ungespeichert
-     bleiben. `scheduleAvailRetry()` löst nach 4 s automatisch einen
-     erneuten `runAvailabilitySaveLoop()`-Durchlauf aus, sofern die
-     Warteschlange noch nicht leer ist – deckt den häufigen Fall (Netz kurz
-     weg) ab, ohne bei einem echten/dauerhaften Fehler den Server zu fluten.
+2. Benutzeraktion → `commit(mutate, msg, nextUI)`: wendet `mutate` sofort an,
+   `render()` (optimistisch) und reiht `apiSave` mit `render: "all"` in
+   `enqueueWrite` ein. Dieselbe Kette nutzt die Planung, damit nie zwei
+   Speichervorgänge parallel dieselbe Revision schicken. Bei `conflict`/Fehler
+   Rollback und erneutes Anwenden noch offener Zu-/Absagen.
+3. `refresh()` beim Zurückkehren lädt neu, aber nur wenn die Server-`rev`
+   **grösser** ist als die lokale und weder eine Speicherung läuft noch
+   Zu-/Absagen in `AVAIL_PENDING` stehen. Ein älterer, verspäteter Ladevorgang
+   überschreibt den neueren Stand nicht. Während einer offenen Erfassung
+   (`UI.view === "record"`) wird nicht nachgeladen, damit der Entwurf bleibt.
+4. `commitAvailability` bleibt nicht blockierend (`kein if (BUSY)`). Jeder Tipp
+   gilt sofort lokal. Gespeichert wird über dieselbe Schreibkette, mit
+   `render: "planning"` (nur das Blatt `Trainerplanung`, nicht Matrix/Kader).
+   Offene Tipps liegen in `AVAIL_PENDING` und in `sessionStorage`
+   (`tp.avail.<teamId>`), werden nach dem nächsten Anmelden nachgezogen und
+   bleiben als Hinweis sichtbar, bis der Server sie angenommen hat. Bei
+   Netzfehler ein automatischer Versuch nach 4 Sekunden, zusätzlich beim
+   Zurückkehren in die App und wenn das Gerät wieder online ist. `commit()`
+   wiederholt eine beliebige Änderung bei Konflikt nicht von selbst.
 
 **Schichten der Funktionen** (Auswahl, alle in `index.html`)
 
@@ -693,18 +690,22 @@ zentralen Delegat-Handler auf `data-act`-Attribute (`ACT`-Objekt).
   `download`, `failText`, `normalize`.
 - Domänenlogik: `plannedOccurrences` (erzeugt Termine aus Serien+Einzelterminen
   für einen Zeitraum), `findOccurrence`, `statRecords`, `playerStats`,
-  `coachStats` (Trainer-Anwesenheitsquote für die Spesenabrechnung – Anteil
-  der Termine im gewählten Zeitraum, bei denen der Trainer in `coachIds`
-  steht; verwendet in `viewStats`, `viewReport`, `exportCsv`).
+  `coachStats` (Trainerquote im gewählten Zeitraum: aktive Trainer und
+  pausierte Trainer mit mindestens einem Einsatz; Blatt `Trainer` listet
+  weiterhin alle).
 - Ansichten (liefern HTML-Strings): `viewEvents`, `viewRecord`, `viewStats`,
   `viewReport`, `viewAdmin`, `viewAdhoc`, `viewLock`.
 - Aktionen: das `ACT`-Objekt bündelt alle `data-act`-Handler.
-- Lokale Entwürfe: `loadDraft`/`saveDraft`/`clearDraft` halten eine begonnene,
-  noch nicht abgeschlossene Erfassung pro Gerät in `localStorage`.
+- Lokale Entwürfe: `loadDraft`/`saveDraft`/`clearDraft`. Liegt ein Entwurf
+  neben einer schon abgeschlossenen Erfassung, zeigt die Ansicht beide
+  Markierungen («abgeschlossen» und «Entwurf auf diesem Gerät») und verwendet
+  den Entwurf.
 
 **PIN-Eingabe:** `addDigit()` sammelt Ziffern. Der **App-PIN** hat unbekannte
-Länge und wird erst mit „Weiter"/Enter abgeschickt; der **Admin-PIN** hat
-bekannte Länge und wird automatisch geprüft. Tastatur (Ziffern, Backspace,
+Länge und wird erst mit „Weiter"/Enter abgeschickt; leer speichern ist nicht
+möglich, ein neuer Wert braucht mindestens 4 Ziffern (`appPinError`,
+serverseitig `bad_pin` nur wenn der PIN sich ändert). Der **Admin-PIN** darf
+leer sein und wird automatisch geprüft, sobald die bekannte Länge erreicht ist. Tastatur (Ziffern, Backspace,
 Enter) wird unterstützt. `viewLock("app")` ersetzt beim Aufruf das komplette
 `#root` (volle `100dvh`, daher zentriert `.lock` dort korrekt), während
 `viewLock("admin")` innerhalb von `<main class="app">` zwischen Kopfzeile und
