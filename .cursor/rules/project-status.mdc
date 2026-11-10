@@ -1,0 +1,14 @@
+---
+description: Arbeitsstand in STATUS.md lesen und nach jeder Änderung nachtragen, damit ein anderes System weiterarbeiten kann.
+alwaysApply: true
+---
+
+# Arbeitsstand nachtragen
+
+`STATUS.md` im Repository-Wurzelverzeichnis ist der Übergabestand für Menschen und für jedes andere AI-System.
+
+1. Lies `STATUS.md` zu Beginn der Arbeit, bevor du Code änderst.
+2. Trage vor dem Abschluss jeder Änderung den neuen Stand in `STATUS.md` ein und committe diese Datei mit der Änderung. Ein Commit ohne nachgetragenen Stand ist unvollständig.
+3. Halte fest: Branch, Pull Request, was erledigt ist, was die betreuende Person noch selbst tun muss, was offen ist, und welche Dateien das nächste System nicht nebenbei ändern soll.
+4. Schreibe den Stand so, dass jemand ohne dieses Gespräch weiterarbeiten kann. Keine PINs, keine Zugangsdaten, keine privaten Daten aus der Google-Tabelle.
+5. Eine erledigte Aufgabe aus «Offen» streichen oder nach «Erledigt» verschieben. Veraltete Aussagen nicht stehen lassen.

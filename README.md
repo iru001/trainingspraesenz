@@ -15,6 +15,8 @@ Team entfällt die Auswahl.
 
 **Einrichtung: siehe [SETUP.md](SETUP.md)** – rund 15 Minuten, einmalig.
 
+**Aktueller Arbeitsstand: [STATUS.md](STATUS.md).** Wer an diesem Projekt weiterarbeitet, liest diese Datei zuerst und trägt danach ein, was sich geändert hat und was noch offen ist.
+
 ## Aufbau
 
 ```
